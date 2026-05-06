@@ -1,38 +1,12 @@
 // Load data
-const meta = await fetch('/meta.json').then(r => r.json());
-const shape = meta.shape; // [N, D]
-const ids = meta.image_ids; // just filenames
+const meta = await fetch('/data/embeddings/image_ids.json').then(r => r.json());
+const ids = meta.map(p => p.replace('data/icons/', '').replace('.png', ''));
+const nearest = await fetch('/data/embeddings/nearest.json').then(r => r.json());
 
-const resp = await fetch('/embeddings.bin');
-const buf = await resp.arrayBuffer();
-const embeddings = new Float32Array(buf); // flat array: N x D
-
-const N = shape[0], D = shape[1];
-
-function getEmbedding(idx) {
-  return embeddings.subarray(idx * D, (idx + 1) * D);
-}
-
-function cosineSim(a, b) {
-  let dot = 0;
-  for (let i = 0; i < D; i++) dot += a[i] * b[i];
-  return dot; // already normalized
-}
+const N = ids.length;
 
 function topK(queryIdx, k) {
-  const q = getEmbedding(queryIdx);
-  const sims = [];
-  for (let i = 0; i < N; i++) {
-    if (i === queryIdx) continue;
-    if (i >= ids.length || !ids[i]) {
-      console.error('Invalid index in topK:', i);
-      continue;
-    }
-    sims.push([i, cosineSim(q, getEmbedding(i))]);
-  }
-  sims.sort((a, b) => b[1] - a[1]);
-  const result = sims.slice(0, k).map(x => x[0]);
-  return result;
+  return nearest[queryIdx].slice(0, k);
 }
 
 function showIcon(idx) {
@@ -94,7 +68,7 @@ function showIcon(idx) {
         const front = document.createElement('div');
         front.className = 'face front';
         const img = document.createElement('img');
-        img.src = '/icons/' + ids[data.idx];
+        img.src = '/api/icon/' + ids[data.idx];
         front.appendChild(img);
 
         const back = document.createElement('div');

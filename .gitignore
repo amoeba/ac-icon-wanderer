@@ -1,2 +1,8 @@
-icons
-embeddings
+data/icons
+data/embeddings
+public/
+.env
+dist
+.wrangler
+data/*
+node_modules

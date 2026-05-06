@@ -62,7 +62,7 @@ def compute_embeddings(
             img = load_image(p)
             if img is not None:
                 images.append(img)
-                paths_this_batch.append(str(p))
+                paths_this_batch.append(p.stem)
 
         if not images:
             continue
@@ -81,12 +81,32 @@ def compute_embeddings(
     return torch.cat(all_embeddings, dim=0), valid_paths
 
 
+def compute_nearest(embeddings: torch.Tensor, k: int) -> list[list[int]]:
+    print("Computing nearest neighbors...")
+    N = embeddings.shape[0]
+    nearest = []
+
+    for i in range(N):
+        if i % 500 == 0:
+            print(f"  Progress: {i}/{N}")
+
+        q = embeddings[i:i+1]
+        dots = torch.matmul(q, embeddings.T)[0]
+
+        topk_vals, topk_idx = torch.topk(dots, k + 1)
+        indices = [int(idx) for idx in topk_idx if idx != i][:k]
+        nearest.append(indices)
+
+    return nearest
+
+
 def main():
     parser = argparse.ArgumentParser(description="Compute SigLIP2 image embeddings")
     parser.add_argument("--image_dir", required=True, help="Directory of images")
     parser.add_argument("--output_dir", default="./embeddings", help="Where to save output files")
     parser.add_argument("--batch_size", type=int, default=8, help="Images per batch")
     parser.add_argument("--model_id", default=MODEL_ID, help="HuggingFace model ID")
+    parser.add_argument("--top_k", type=int, default=100, help="Number of nearest neighbors to compute")
     args = parser.parse_args()
 
     image_dir = Path(args.image_dir)
@@ -111,13 +131,18 @@ def main():
 
     embeddings_path = output_dir / "embeddings.pt"
     ids_path = output_dir / "image_ids.json"
+    nearest_path = output_dir / "nearest.json"
 
     torch.save(embeddings, embeddings_path)
     ids_path.write_text(json.dumps(valid_paths, indent=2))
 
+    nearest = compute_nearest(embeddings, args.top_k)
+    nearest_path.write_text(json.dumps(nearest))
+
     print(f"\nDone.")
     print(f"  Embeddings : {embeddings_path}  {tuple(embeddings.shape)}")
     print(f"  Image IDs  : {ids_path}")
+    print(f"  Nearest    : {nearest_path}")
     print(f"  Skipped    : {len(image_paths) - len(valid_paths)} images (unreadable)")
 
 

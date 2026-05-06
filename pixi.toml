@@ -4,17 +4,22 @@ version = "0.1.0"
 channels = ["conda-forge"]
 platforms = ["osx-arm64"]
 
-[tasks]
-export = "python export_data.py"
-find = "python find.py"
-filter-icons = "python filter_icons.py"
-make-transparent = "python make_white_transparent.py"
+[tasks.export]
+cmd = "python scripts/export_data.py"
+env = { KMP_DUPLICATE_LIB_OK = "TRUE" }
+
+[tasks.dev]
+cmd = "wrangler dev --remote"
+
+[tasks.r2-upload]
+cmd = "npm run build && npm run r2:upload-icons && npm run r2:upload && node scripts/r2-upload.js dist"
+
+[tasks.deploy]
+cmd = "npm run deploy"
 
 [tasks.embed]
-cmd = "python embed.py"
+cmd = "python scripts/embed.py --image_dir ./data/icons --output_dir ./data/embeddings"
 env = { KMP_DUPLICATE_LIB_OK = "TRUE" }
-inputs = [{ file = "embeddings/embeddings.pt", missing = "allow" }]
-outputs = [{ file = "embeddings/embeddings.pt", missing = "allow" }]
 
 [dependencies]
 python = ">=3.10"
