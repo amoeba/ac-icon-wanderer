@@ -36,10 +36,12 @@ function getContentType(path: string): string {
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
-    console.log('Request:', url.pathname);
+    console.log("Request:", url.pathname);
 
     if (url.pathname === "/") {
-      return new Response(INDEX_HTML, { headers: { "Content-Type": "text/html" } });
+      return new Response(INDEX_HTML, {
+        headers: { "Content-Type": "text/html" },
+      });
     }
 
     if (url.pathname.startsWith("/api/")) {
@@ -48,44 +50,47 @@ export default {
         if (!iconId || iconId.includes(",") || iconId.includes(".")) {
           return new Response("Invalid icon id", { status: 400 });
         }
-
-        const fileName = iconId + ".png";
-
-        const obj = await env.R2.get(fileName);
+        const obj = await env.R2.get(`icons/${iconId}.png`);
         if (obj) {
           return new Response(obj.body, {
-            headers: { "Content-Type": "image/png" }
+            headers: { "Content-Type": "image/png" },
           });
         }
         return new Response("Icon not found", { status: 404 });
       }
 
       if (url.pathname.startsWith("/api/embeddings/")) {
-      if (url.pathname === "/api/embeddings/meta") {
-        const obj = await env.R2.get("embeddings/meta.json");
-        if (obj) {
-          return new Response(obj.body, { headers: { "Content-Type": "application/json" } });
+        if (url.pathname === "/api/embeddings/meta") {
+          const obj = await env.R2.get("embeddings/meta.json");
+          if (obj) {
+            return new Response(obj.body, {
+              headers: { "Content-Type": "application/json" },
+            });
+          }
+          return new Response("Meta not found", { status: 404 });
         }
-        return new Response("Meta not found", { status: 404 });
-      }
 
-      if (url.pathname.startsWith("/api/embeddings/nearest/")) {
-        const iconId = url.pathname.split("/api/embeddings/nearest/")[1];
-        const obj = await env.R2.get(`embeddings/nearest/${iconId}.json`);
-        if (obj) {
-          return new Response(obj.body, { headers: { "Content-Type": "application/json" } });
+        if (url.pathname.startsWith("/api/embeddings/nearest/")) {
+          const iconId = url.pathname
+            .split("/api/embeddings/nearest/")[1]
+            .replace(/\.json$/, "");
+          const obj = await env.R2.get(`embeddings/nearest/${iconId}.json`);
+          if (obj) {
+            return new Response(obj.body, {
+              headers: { "Content-Type": "application/json" },
+            });
+          }
+          return new Response("Nearest not found", { status: 404 });
         }
-        return new Response("Nearest not found", { status: 404 });
-      }
 
-      return new Response("Not Found", { status: 404 });
-    }
+        return new Response("Not Found", { status: 404 });
+      }
 
       if (url.pathname === "/api/assets") {
         if (request.method === "GET") {
           const objects = await env.R2.list();
           return new Response(JSON.stringify(objects), {
-            headers: { "Content-Type": "application/json" }
+            headers: { "Content-Type": "application/json" },
           });
         }
 
@@ -107,10 +112,10 @@ export default {
     const obj = await env.R2.get(path);
     if (obj) {
       return new Response(obj.body, {
-        headers: { "Content-Type": getContentType(path) }
+        headers: { "Content-Type": getContentType(path) },
       });
     }
 
     return new Response("Not Found", { status: 404 });
-  }
+  },
 };
