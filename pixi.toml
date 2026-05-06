@@ -12,6 +12,13 @@ env = { KMP_DUPLICATE_LIB_OK = "TRUE" }
 cmd = "python scripts/embed.py --image_dir ./data/icons --output_dir ./data/embeddings"
 env = { KMP_DUPLICATE_LIB_OK = "TRUE" }
 
+[tasks.upload-icons]
+cmd = "node scripts/r2-upload.js data/icons"
+
+[tasks.upload-embeddings]
+cmd = "python scripts/export_r2.py"
+env = { KMP_DUPLICATE_LIB_OK = "TRUE" }
+
 [dependencies]
 python = ">=3.10"
 pip = "*"
