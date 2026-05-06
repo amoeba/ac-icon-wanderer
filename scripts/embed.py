@@ -104,7 +104,7 @@ def main():
     parser = argparse.ArgumentParser(description="Compute SigLIP2 image embeddings")
     parser.add_argument("--image_dir", required=True, help="Directory of images")
     parser.add_argument("--output_dir", default="./embeddings", help="Where to save output files")
-    parser.add_argument("--batch_size", type=int, default=8, help="Images per batch")
+    parser.add_argument("--batch_size", type=int, default=128, help="Images per batch")
     parser.add_argument("--model_id", default=MODEL_ID, help="HuggingFace model ID")
     parser.add_argument("--top_k", type=int, default=100, help="Number of nearest neighbors to compute")
     args = parser.parse_args()
