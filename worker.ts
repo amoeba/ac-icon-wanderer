@@ -60,6 +60,27 @@ export default {
         return new Response("Icon not found", { status: 404 });
       }
 
+      if (url.pathname.startsWith("/api/embeddings/")) {
+      if (url.pathname === "/api/embeddings/meta") {
+        const obj = await env.R2.get("embeddings/meta.json");
+        if (obj) {
+          return new Response(obj.body, { headers: { "Content-Type": "application/json" } });
+        }
+        return new Response("Meta not found", { status: 404 });
+      }
+
+      if (url.pathname.startsWith("/api/embeddings/nearest/")) {
+        const iconId = url.pathname.split("/api/embeddings/nearest/")[1];
+        const obj = await env.R2.get(`embeddings/nearest/${iconId}.json`);
+        if (obj) {
+          return new Response(obj.body, { headers: { "Content-Type": "application/json" } });
+        }
+        return new Response("Nearest not found", { status: 404 });
+      }
+
+      return new Response("Not Found", { status: 404 });
+    }
+
       if (url.pathname === "/api/assets") {
         if (request.method === "GET") {
           const objects = await env.R2.list();

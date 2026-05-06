@@ -1,11 +1,11 @@
-const ICONS_API = 'https://wander.treestats.net/api/icon/'
-const IMAGE_IDS_JSON = '/data/embeddings/image_ids.json'
+const ICONS_API = '/api/icon/'
+const EMBEDDINGS_API = '/api/embeddings/'
 
 let ids = []
 
 async function loadNearest(idx) {
   const id = ids[idx]
-  const res = await fetch(`/data/embeddings/nearest/${id}.json`)
+  const res = await fetch(`${EMBEDDINGS_API}nearest/${id}.json`)
   return res.json()
 }
 
@@ -66,8 +66,9 @@ async function showIcon(idx) {
 }
 
 async function main() {
-  const idsRes = await fetch(IMAGE_IDS_JSON)
-  ids = await idsRes.json()
+  const metaRes = await fetch(`${EMBEDDINGS_API}meta`)
+  const meta = await metaRes.json()
+  ids = meta.image_ids
 
   console.log('Loaded ids:', ids.length)
 
