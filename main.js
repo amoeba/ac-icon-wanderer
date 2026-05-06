@@ -83,12 +83,12 @@ function showIcon(idx) {
           cell.onclick = () => showIcon(data.idx);
         }
 
-        // Stagger flip animation by Manhattan distance from center
-        const x = c - center;
-        const y = center - r;
-        const dist = Math.abs(x) + Math.abs(y);
-        const delay = dist * 120;
-        setTimeout(() => card.classList.add('flip'), delay);
+        // Disabled staggered flip - causes icons to flip away
+        // const x = c - center;
+        // const y = center - r;
+        // const dist = Math.abs(x) + Math.abs(y);
+        // const delay = dist * 120;
+        // setTimeout(() => card.classList.add('flip'), delay);
 
         cell.appendChild(card);
       }
