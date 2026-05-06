@@ -1,27 +1,3 @@
-const INDEX_HTML = `<!DOCTYPE html>
-<html>
-<head>
-  <title>Icon Navigator</title>
-  <style>
-    body { background: #0f0f0f; margin: 0; display: flex; align-items: center; justify-content: center; min-height: 100vh; }
-    .grid { display: grid; gap: 2px; padding: 10px; }
-    .cell { width: 40px; height: 40px; position: relative; cursor: pointer; border: 1px solid #333; perspective: 800px; }
-    .cell:hover { border-color: #666; }
-    .card { width: 100%; height: 100%; position: relative; transform-style: preserve-3d; }
-    .card.flip { animation: flipCard 0.8s ease-out forwards; }
-    .face { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; backface-visibility: hidden; }
-    .front { background: #1a1a1a; transform: rotateY(0deg); }
-    .front img { width: 100%; height: 100%; object-fit: contain; }
-    .back { background: #111; transform: rotateY(180deg); }
-    @keyframes flipCard { from { transform: rotateY(0deg); } to { transform: rotateY(180deg); } }
-  </style>
-  <script type="module" src="/main.js"></script>
-</head>
-<body>
-  <div id="grid" class="grid"></div>
-</body>
-</html>`;
-
 const MIME_TYPES: Record<string, string> = {
   ".html": "text/html",
   ".js": "application/javascript",
@@ -82,13 +58,7 @@ export default {
       return new Response("Not Found", { status: 404 });
     }
 
-    const path = url.pathname.slice(1);
-
-    if (!path || path === "index.html") {
-      return new Response(INDEX_HTML, {
-        headers: { "Content-Type": "text/html" }
-      });
-    }
+    const path = url.pathname.slice(1) || "index.html";
 
     const obj = await env.R2.get(path);
     if (obj) {

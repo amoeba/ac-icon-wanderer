@@ -83,12 +83,10 @@ function showIcon(idx) {
           cell.onclick = () => showIcon(data.idx);
         }
 
-        // Disabled staggered flip - causes icons to flip away
-        // const x = c - center;
-        // const y = center - r;
-        // const dist = Math.abs(x) + Math.abs(y);
-        // const delay = dist * 120;
-        // setTimeout(() => card.classList.add('flip'), delay);
+        // Flip animation when clicking non-center icons (except immediate neighbors)
+        if (!data.isFocus) {
+          cell.onclick = () => showIcon(data.idx);
+        }
 
         cell.appendChild(card);
       }
