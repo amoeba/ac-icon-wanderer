@@ -1,74 +1,77 @@
-import './style.css'
-
-const ICONS_API = '/api/icon/'
-const NEAREST_JSON = '/data/embeddings/nearest.json'
+const ICONS_API = 'https://wander.treestats.net/api/icon/'
 const IMAGE_IDS_JSON = '/data/embeddings/image_ids.json'
 
-async function main() {
+let ids = []
+
+async function loadNearest(idx) {
+  const id = ids[idx]
+  const res = await fetch(`/data/embeddings/nearest/${id}.json`)
+  return res.json()
+}
+
+async function showIcon(idx) {
   const grid = document.getElementById('grid')
+  const similar = await loadNearest(idx)
+  
+  grid.innerHTML = ''
+  grid.style.gridTemplateColumns = ''
+  
+  const total = similar.length + 1
+  const size = Math.ceil(Math.sqrt(total))
+  const center = Math.floor(size / 2)
+  grid.style.gridTemplateColumns = `repeat(${size}, 40px)`
 
-  const [nearestRes, idsRes] = await Promise.all([
-    fetch(NEAREST_JSON),
-    fetch(IMAGE_IDS_JSON)
-  ])
-  const nearest = await nearestRes.json()
-  const imageIds = await idsRes.json()
+  const cells = Array.from({length: size}, () => Array(size).fill(null))
+  cells[center][center] = {idx: idx, isFocus: true}
 
-  const randomIndex = Math.floor(Math.random() * nearest.length)
-  const neighbors = nearest[randomIndex]
-
-  console.log('imageIds:', imageIds.length)
-  console.log('Random start:', randomIndex, '->', imageIds[randomIndex])
-
-  const cols = Math.ceil(Math.sqrt(neighbors.length + 1))
-  grid.style.gridTemplateColumns = `repeat(${cols}, 1fr)`
-
-  const centerCell = document.createElement('div')
-  centerCell.className = 'cell'
-  const centerCard = document.createElement('div')
-  centerCard.className = 'card'
-  const centerFront = document.createElement('div')
-  centerFront.className = 'face front'
-  const centerImg = document.createElement('img')
-  centerImg.src = `${ICONS_API}${imageIds[randomIndex]}`
-  centerFront.appendChild(centerImg)
-  centerCard.appendChild(centerFront)
-  centerCell.appendChild(centerCard)
-  grid.appendChild(centerCell)
-
-  for (const idx of neighbors) {
-    const hexId = imageIds[idx]
-    if (!hexId) continue
-
-    const cell = document.createElement('div')
-    cell.className = 'cell'
-
-    const card = document.createElement('div')
-    card.className = 'card'
-
-    const front = document.createElement('div')
-    front.className = 'face front'
-
-    const img = document.createElement('img')
-    img.src = `${ICONS_API}${hexId}`
-    img.loading = 'lazy'
-
-    front.appendChild(img)
-
-    const back = document.createElement('div')
-    back.className = 'face back'
-    back.textContent = idx
-
-    card.appendChild(front)
-    card.appendChild(back)
-    cell.appendChild(card)
-
-    cell.addEventListener('click', () => {
-      card.classList.toggle('flip')
-    })
-
-    grid.appendChild(cell)
+  const positions = []
+  for (let r = 0; r < size; r++) {
+    for (let c = 0; c < size; c++) {
+      if (r === center && c === center) continue
+      positions.push([r, c])
+    }
   }
+  positions.sort((a, b) => (Math.abs(a[0] - center) + Math.abs(a[1] - center)) - (Math.abs(b[0] - center) + Math.abs(b[1] - center)))
+
+  for (let i = 0; i < Math.min(similar.length, positions.length); i++) {
+    const [r, c] = positions[i]
+    cells[r][c] = {idx: similar[i], isFocus: false}
+  }
+
+  for (let r = 0; r < size; r++) {
+    for (let c = 0; c < size; c++) {
+      const cell = document.createElement('div')
+      cell.className = 'cell'
+      cell.style.gridRow = r + 1
+      cell.style.gridColumn = c + 1
+
+      const data = cells[r][c]
+      if (data === null || data.idx === undefined) {
+        cell.style.visibility = 'hidden'
+      } else {
+        const img = document.createElement('img')
+        img.src = ICONS_API + ids[data.idx]
+
+        if (data.isFocus) {
+          cell.classList.add('focus')
+        } else {
+          cell.onclick = () => showIcon(data.idx)
+        }
+
+        cell.appendChild(img)
+      }
+      grid.appendChild(cell)
+    }
+  }
+}
+
+async function main() {
+  const idsRes = await fetch(IMAGE_IDS_JSON)
+  ids = await idsRes.json()
+
+  console.log('Loaded ids:', ids.length)
+
+  showIcon(Math.floor(Math.random() * ids.length))
 }
 
 main()
