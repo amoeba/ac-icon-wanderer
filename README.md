@@ -36,6 +36,13 @@ And then `pixi run export` to export the embeddings into the format used by the 
 pixi run export
 ```
 
+And then upload them to R2:
+
+```sh
+rclone copy data/icons/ r2:ac-icon-wanderer-assets/icons --progress
+rclone copy data/embeddings/ r2:ac-icon-wanderer-assets/embeddings --progress
+```
+
 ## Development
 
 ```bash
