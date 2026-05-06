@@ -1,58 +1,44 @@
 # ac-icon-wanderer
 
-Not all who wander are lost. Explore Asheron's Call game icons using vector embeddings.
+Explore Asheron's Call game icons using vector embeddings.
 
-## Quick Start
-
-```bash
-pixi run embed      # Generate embeddings from data/icons -> data/embeddings
-pixi run export     # Export to public/embeddings.bin + public/meta.json
-pixi run r2-upload  # Upload icons + embeddings to R2
-pixi run deploy     # Build + deploy to Cloudflare Workers
-```
-
-## Steps
-
-### 1. Generate Embeddings
+## Commands
 
 ```bash
-pixi run embed
+npm run dev      # Start Vite dev server (with HMR)
+npm run build    # Build Vite app to dist/
+npm run deploy   # Build + deploy to Cloudflare Workers
+npm run r2:upload-icons  # Upload data/icons to R2
+npm run r2:upload       # Upload public/ to R2
 ```
 
-Input: `data/icons/` (PNG images)
-Output: `data/embeddings/embeddings.pt` (tensor), `data/embeddings/image_ids.json` (labels)
-
-Generates 512-dimensional embeddings for each icon using a CLIP vision model.
-
-### 2. Export Embeddings
+## Development
 
 ```bash
-pixi run export
+npm run dev
 ```
 
-Input: `data/embeddings/`
-Output: `public/embeddings.bin` (Float32 binary), `public/meta.json` (shape + image_ids)
+Runs Vite dev server at http://localhost:5173 with hot module replacement.
 
-Converts PyTorch tensor to binary format for fast loading in the browser.
-
-### 3. Upload to R2
+To test the worker locally:
 
 ```bash
-pixi run r2-upload
+npx wrangler dev
 ```
 
-Input: `data/icons/`, `public/`
-Output: R2 bucket `ac-icon-wanderer-assets`
-
-Uploads icons and embeddings to Cloudflare R2 for serving from the worker.
-
-### 4. Deploy
+## Deploy
 
 ```bash
-pixi run deploy
+npm run deploy
 ```
 
-Input: `dist/` (built static site), `worker.ts`
-Output: https://ac-icon-wanderer.treestats.workers.dev
+Builds the Vite app and deploys the Worker with static assets to Cloudflare Workers. Static assets are served from `dist/` via Cloudflare's Static Assets feature (configured in `wrangler.toml`).
 
-Builds the Vite app and deploys the Worker with R2 bindings.
+## R2 Storage
+
+Icons and embeddings are stored in R2 bucket `ac-icon-wanderer-assets`. Upload with:
+
+```bash
+npm run r2:upload-icons  # Upload icons
+npm run r2:upload        # Upload embeddings
+```

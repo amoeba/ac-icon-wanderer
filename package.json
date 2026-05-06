@@ -4,9 +4,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "npm run build && wrangler pages dev dist",
-    "build": "vite build && cp main.js dist/",
-    "preview": "vite preview",
+    "dev": "vite dev",
+    "build": "vite build",
     "deploy": "npm run build && wrangler deploy",
     "r2:upload-icons": "node scripts/r2-upload.js data/icons",
     "r2:upload": "node scripts/r2-upload.js public"

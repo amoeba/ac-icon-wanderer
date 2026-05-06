@@ -1,3 +1,21 @@
+const INDEX_HTML = `<!DOCTYPE html>
+<html>
+<head>
+  <title>Icon Navigator</title>
+  <style>
+    body { background: #0f0f0f; margin: 0; display: flex; align-items: center; justify-content: center; min-height: 100vh; }
+    .grid { display: grid; gap: 2px; padding: 10px; }
+    .cell { width: 40px; height: 40px; position: relative; cursor: pointer; border: 1px solid #333; }
+    .cell:hover { border-color: #666; }
+    .cell img { width: 100%; height: 100%; object-fit: contain; }
+  </style>
+  <script type="module" src="/main.js"></script>
+</head>
+<body>
+  <div id="grid" class="grid"></div>
+</body>
+</html>`;
+
 const MIME_TYPES: Record<string, string> = {
   ".html": "text/html",
   ".js": "application/javascript",
@@ -18,6 +36,11 @@ function getContentType(path: string): string {
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
+    console.log('Request:', url.pathname);
+
+    if (url.pathname === "/") {
+      return new Response(INDEX_HTML, { headers: { "Content-Type": "text/html" } });
+    }
 
     if (url.pathname.startsWith("/api/")) {
       if (url.pathname.startsWith("/api/icon/")) {
@@ -26,7 +49,7 @@ export default {
           return new Response("Invalid icon id", { status: 400 });
         }
 
-        const fileName = iconId.includes(".png") ? iconId : iconId + ".png";
+        const fileName = iconId + ".png";
 
         const obj = await env.R2.get(fileName);
         if (obj) {
@@ -58,7 +81,7 @@ export default {
       return new Response("Not Found", { status: 404 });
     }
 
-    const path = url.pathname.slice(1) || "index.html";
+    const path = url.pathname === "/" ? "index.html" : url.pathname.slice(1);
 
     const obj = await env.R2.get(path);
     if (obj) {
