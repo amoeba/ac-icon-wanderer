@@ -8,15 +8,6 @@ platforms = ["osx-arm64"]
 cmd = "python scripts/export_data.py"
 env = { KMP_DUPLICATE_LIB_OK = "TRUE" }
 
-[tasks.dev]
-cmd = "wrangler dev --remote"
-
-[tasks.r2-upload]
-cmd = "npm run build && npm run r2:upload-icons && npm run r2:upload && node scripts/r2-upload.js dist"
-
-[tasks.deploy]
-cmd = "npm run deploy"
-
 [tasks.embed]
 cmd = "python scripts/embed.py --image_dir ./data/icons --output_dir ./data/embeddings"
 env = { KMP_DUPLICATE_LIB_OK = "TRUE" }
