@@ -294,7 +294,7 @@ async function showIcon(iconId) {
     return;
   }
 
-  setStatus(`Loading ${iconId} with ${currentModelId}...`);
+  setStatus("");
   setIconDetail(iconId, "Loading...");
   const [similarResult, detailResult] = await Promise.allSettled([
     loadNearest(currentModelId, iconId),
@@ -390,7 +390,7 @@ async function showIcon(iconId) {
 }
 
 async function main() {
-  setStatus("Loading...");
+  setStatus("");
   setModelPickerEnabled(false);
 
   const manifestData = await loadManifest();
