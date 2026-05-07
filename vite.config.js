@@ -18,6 +18,24 @@ function isSafeModelId(value) {
   return /^[a-z0-9-]+$/.test(value)
 }
 
+function normalizeHexReference(value) {
+  if (value == null) {
+    return null
+  }
+
+  const normalizedValue = String(value).trim()
+  if (!normalizedValue) {
+    return null
+  }
+
+  const hexDigits = normalizedValue.replace(/^0x/i, "")
+  if (!/^[0-9a-fA-F]+$/.test(hexDigits)) {
+    return null
+  }
+
+  return `0x${hexDigits.toUpperCase()}`
+}
+
 function sendJson(res, body, statusCode = 200) {
   res.statusCode = statusCode
   res.setHeader("Content-Type", "application/json")
@@ -85,12 +103,13 @@ function localApiPlugin() {
 
           if (pathname.startsWith("/api/icon-detail/")) {
             const iconId = pathname.slice("/api/icon-detail/".length)
-            if (!isSafeSegment(iconId)) {
+            const iconHex = normalizeHexReference(iconId)
+            if (!iconHex || !isSafeSegment(iconId)) {
               sendText(res, "Invalid icon id", 400)
               return
             }
 
-            const response = await fetch(iconDetailUrl(iconId))
+            const response = await fetch(iconDetailUrl(iconHex))
             if (!response.ok) {
               sendText(res, "Icon detail lookup failed", 502)
               return
@@ -98,12 +117,12 @@ function localApiPlugin() {
 
             const rows = await response.json()
             if (!rows.length) {
-              sendJson(res, { icon_hex: iconId, name: null }, 404)
+              sendJson(res, { icon_hex: iconHex, name: null }, 404)
               return
             }
 
             sendJson(res, {
-              icon_hex: iconId,
+              icon_hex: iconHex,
               name: rows[0].name ?? rows[0].class_name ?? null,
               class_id: rows[0].class_id ?? null,
               class_name: rows[0].class_name ?? null,

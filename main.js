@@ -33,6 +33,24 @@ function setStatus(message) {
   }
 }
 
+function normalizeHexReference(hexValue) {
+  if (hexValue == null) {
+    return null
+  }
+
+  const normalizedHex = String(hexValue).trim()
+  if (!normalizedHex) {
+    return null
+  }
+
+  const hexDigits = normalizedHex.replace(/^0x/i, "")
+  if (!/^[0-9a-fA-F]+$/.test(hexDigits)) {
+    return null
+  }
+
+  return `0x${hexDigits.toUpperCase()}`
+}
+
 function formatIconHex(hexValue) {
   if (hexValue == null) {
     return "Unavailable"
@@ -47,9 +65,7 @@ function formatIconHex(hexValue) {
     return normalizedHex
   }
 
-  return normalizedHex.startsWith("0x")
-    ? normalizedHex
-    : `0x${normalizedHex}`
+  return normalizeHexReference(normalizedHex) ?? normalizedHex
 }
 
 function setIconDetail(hexValue, nameValue) {
@@ -190,12 +206,14 @@ function ensureGridCells(grid, size) {
     return {
       cells: Array.from(grid.children),
       animate: false,
+      intro: !prefersReducedMotion(),
     }
   }
 
   return {
     cells: Array.from(grid.children),
     animate: grid.dataset.ready === "true" && !prefersReducedMotion(),
+    intro: false,
   }
 }
 
@@ -351,7 +369,7 @@ async function flipCell(cell, data, notifyMissingIcon, isCurrentRender) {
 
 async function renderGridCells(grid, cells, notifyMissingIcon, isCurrentRender) {
   const size = cells.length
-  const { cells: cellElements, animate } = ensureGridCells(grid, size)
+  const { cells: cellElements, animate, intro } = ensureGridCells(grid, size)
   const flipTargets = []
 
   for (let row = 0; row < size; row += 1) {
@@ -361,14 +379,19 @@ async function renderGridCells(grid, cells, notifyMissingIcon, isCurrentRender) 
       const data = cells[row][col]
       const previousStateKey = cell.dataset.stateKey ?? ""
       const nextStateKey = cellStateKey(data)
-      const shouldFlip = animate && previousStateKey && nextStateKey
+      const shouldFlip =
+        (animate && previousStateKey && nextStateKey) ||
+        (intro && nextStateKey)
 
       if (shouldFlip) {
         const card = cell.querySelector(".cell-card")
-        const { back } = card ? cardFaces(card) : { back: null }
+        const { front, back } = card ? cardFaces(card) : { front: null, back: null }
 
         cell.disabled = true
         cell.style.visibility = "visible"
+        if (front) {
+          front.replaceChildren()
+        }
         if (back) {
           back.replaceChildren()
           if (data?.iconId) {
@@ -473,12 +496,13 @@ async function loadNearest(modelId, iconId) {
 }
 
 async function loadIconDetail(iconId) {
+  const iconHex = normalizeHexReference(iconId) ?? String(iconId)
   let response
   try {
-    response = await fetch(`${ICON_DETAIL_API}${encodeURIComponent(iconId)}`)
+    response = await fetch(`${ICON_DETAIL_API}${encodeURIComponent(iconHex)}`)
   } catch {
     return {
-      icon_hex: iconId,
+      icon_hex: iconHex,
       name: "Unavailable",
     }
   }
@@ -487,7 +511,7 @@ async function loadIconDetail(iconId) {
     const contentType = response.headers.get("content-type") ?? ""
     if (!contentType.includes("application/json")) {
       return {
-        icon_hex: iconId,
+        icon_hex: iconHex,
         name: "Unavailable",
       }
     }
@@ -495,12 +519,12 @@ async function loadIconDetail(iconId) {
     try {
       const detail = await response.json()
       return {
-        icon_hex: detail.icon_hex ?? iconId,
+        icon_hex: detail.icon_hex ?? iconHex,
         name: detail.name ?? "No database match",
       }
     } catch {
       return {
-        icon_hex: iconId,
+        icon_hex: iconHex,
         name: "Unavailable",
       }
     }
@@ -508,7 +532,7 @@ async function loadIconDetail(iconId) {
 
   if (!response.ok) {
     return {
-      icon_hex: iconId,
+      icon_hex: iconHex,
       name: "Unavailable",
     }
   }
@@ -602,9 +626,10 @@ async function showIcon(iconId) {
     ? similarResult.value
     : null
   const similar = Array.isArray(similarValue) ? similarValue : []
+  const iconHex = normalizeHexReference(iconId) ?? String(iconId)
   const detail = detailResult.status === "fulfilled"
     ? detailResult.value
-    : { icon_hex: iconId, name: "Unavailable" }
+    : { icon_hex: iconHex, name: "Unavailable" }
 
   const size = gridSizeForNeighborCount(similar.length)
   const center = Math.floor(size / 2)

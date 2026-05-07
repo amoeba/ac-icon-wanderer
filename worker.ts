@@ -9,6 +9,24 @@ async function getObject(env, path: string) {
   return env.R2.get(path);
 }
 
+function normalizeHexReference(value: string | null | undefined): string | null {
+  if (value == null) {
+    return null;
+  }
+
+  const normalizedValue = String(value).trim();
+  if (!normalizedValue) {
+    return null;
+  }
+
+  const hexDigits = normalizedValue.replace(/^0x/i, "");
+  if (!/^[0-9a-fA-F]+$/.test(hexDigits)) {
+    return null;
+  }
+
+  return `0x${hexDigits.toUpperCase()}`;
+}
+
 function iconDetailUrl(iconId: string): string {
   const iconValue = parseInt(iconId, 16);
   const sql = `
@@ -48,11 +66,17 @@ export default {
 
     if (url.pathname.startsWith("/api/icon-detail/")) {
       const iconId = url.pathname.split("/api/icon-detail/")[1];
-      if (!iconId || iconId.includes(",") || iconId.includes(".")) {
+      const iconHex = normalizeHexReference(iconId);
+      if (
+        !iconId ||
+        !iconHex ||
+        iconId.includes(",") ||
+        iconId.includes(".")
+      ) {
         return new Response("Invalid icon id", { status: 400 });
       }
 
-      const response = await fetch(iconDetailUrl(iconId));
+      const response = await fetch(iconDetailUrl(iconHex));
       if (!response.ok) {
         return new Response("Icon detail lookup failed", { status: 502 });
       }
@@ -60,14 +84,14 @@ export default {
       const rows = await response.json<any[]>();
       if (!rows.length) {
         return new Response(
-          JSON.stringify({ icon_hex: iconId, name: null }),
+          JSON.stringify({ icon_hex: iconHex, name: null }),
           { status: 404, headers: { "Content-Type": "application/json" } },
         );
       }
 
       return new Response(
         JSON.stringify({
-          icon_hex: iconId,
+          icon_hex: iconHex,
           name: rows[0].name ?? rows[0].class_name ?? null,
           class_id: rows[0].class_id ?? null,
           class_name: rows[0].class_name ?? null,
