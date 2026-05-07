@@ -12,6 +12,31 @@ except ModuleNotFoundError:
     from scripts.model_registry import DEFAULT_MODEL_KEY, discover_model_paths
 
 
+def exported_model_record(model_path: Path) -> dict | None:
+    meta_path = model_path / "meta.json"
+    nearest_dir = model_path / "nearest"
+    if not meta_path.exists() or not nearest_dir.is_dir():
+        return None
+
+    meta = json.loads(meta_path.read_text())
+    image_ids = meta.get("image_ids") or []
+    first_neighbor_path = next(iter(sorted(nearest_dir.glob("*.json"))), None)
+    neighbor_count = 0
+    if first_neighbor_path is not None:
+        neighbor_count = len(json.loads(first_neighbor_path.read_text()))
+
+    return {
+        "id": meta["id"],
+        "label": meta["label"],
+        "kind": meta["kind"],
+        "shape": meta["shape"],
+        "image_count": len(image_ids),
+        "neighbor_count": neighbor_count,
+        "description": meta.get("description"),
+        "model_id": meta.get("model_id"),
+    }
+
+
 def export_model(spec, source_path: Path, output_path: Path) -> dict:
     embeddings = torch.load(source_path / "embeddings.pt", weights_only=True)
     image_ids = json.loads((source_path / "image_ids.json").read_text())
@@ -58,19 +83,32 @@ def export_model(spec, source_path: Path, output_path: Path) -> dict:
 
 def main():
     root = Path("data/embeddings")
-    model_paths = discover_model_paths(root)
-    if not model_paths:
+    raw_model_paths = discover_model_paths(root)
+    existing_exported_models = {
+        child.name: exported_model_record(child)
+        for child in sorted(root.iterdir())
+        if child.is_dir()
+    } if root.exists() else {}
+    existing_exported_models = {
+        key: value for key, value in existing_exported_models.items() if value is not None
+    }
+
+    if not raw_model_paths and not existing_exported_models:
         raise FileNotFoundError(f"No embedding outputs found in {root}")
 
     exported_paths: list[tuple[str, Path]] = []
-    models = []
-    for spec, path in model_paths:
+    models_by_id = dict(existing_exported_models)
+    for spec, path in raw_model_paths:
         output_path = path if path != root else root / spec.key
-        models.append(export_model(spec, path, output_path))
+        models_by_id[spec.key] = export_model(spec, path, output_path)
         exported_paths.append((spec.key, output_path))
 
+    models = [models_by_id[key] for key in sorted(models_by_id)]
     default_model = DEFAULT_MODEL_KEY if any(model["id"] == DEFAULT_MODEL_KEY for model in models) else models[0]["id"]
-    default_model_path = next(path for key, path in exported_paths if key == default_model)
+    default_model_path = next(
+        (path for key, path in exported_paths if key == default_model),
+        root / default_model,
+    )
 
     shutil.copyfile(default_model_path / "meta.json", root / "meta.json")
     shutil.rmtree(root / "nearest", ignore_errors=True)

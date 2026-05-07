@@ -12,6 +12,7 @@ class ModelSpec:
     label: str
     kind: str
     model_id: str | None = None
+    description: str | None = None
 
 
 DEFAULT_MODEL_KEY = "siglip2"

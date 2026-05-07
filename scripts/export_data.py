@@ -12,6 +12,31 @@ except ModuleNotFoundError:
     from scripts.model_registry import DEFAULT_MODEL_KEY, discover_model_paths
 
 
+def exported_model_record(model_path: Path) -> dict | None:
+    meta_path = model_path / "meta.json"
+    nearest_dir = model_path / "nearest"
+    if not meta_path.exists() or not nearest_dir.is_dir():
+        return None
+
+    meta = json.loads(meta_path.read_text())
+    image_ids = meta.get("image_ids") or []
+    first_neighbor_path = next(iter(sorted(nearest_dir.glob("*.json"))), None)
+    neighbor_count = 0
+    if first_neighbor_path is not None:
+        neighbor_count = len(json.loads(first_neighbor_path.read_text()))
+
+    return {
+        "id": meta["id"],
+        "label": meta["label"],
+        "kind": meta["kind"],
+        "shape": meta["shape"],
+        "image_count": len(image_ids),
+        "neighbor_count": neighbor_count,
+        "description": meta.get("description"),
+        "model_id": meta.get("model_id"),
+    }
+
+
 def export_model(spec, model_path: Path, public_root: Path) -> dict:
     embeddings = torch.load(model_path / "embeddings.pt", weights_only=True)
     image_ids = json.loads((model_path / "image_ids.json").read_text())
@@ -63,14 +88,29 @@ def export_model(spec, model_path: Path, public_root: Path) -> dict:
 def main():
     root = Path("data/embeddings")
     public_root = Path("public/embeddings")
-    model_paths = discover_model_paths(root)
-    if not model_paths:
+    raw_model_paths = discover_model_paths(root)
+    existing_exported_models = {
+        child.name: exported_model_record(child)
+        for child in sorted(root.iterdir())
+        if child.is_dir()
+    } if root.exists() else {}
+    existing_exported_models = {
+        key: value for key, value in existing_exported_models.items() if value is not None
+    }
+
+    if not raw_model_paths and not existing_exported_models:
         raise FileNotFoundError(f"No embedding outputs found in {root}")
 
     shutil.rmtree(public_root, ignore_errors=True)
     public_root.mkdir(parents=True, exist_ok=True)
 
-    models = [export_model(spec, path, public_root) for spec, path in model_paths]
+    models_by_id = dict(existing_exported_models)
+    for model_id in existing_exported_models:
+        shutil.copytree(root / model_id, public_root / model_id, dirs_exist_ok=True)
+    for spec, path in raw_model_paths:
+        models_by_id[spec.key] = export_model(spec, path, public_root)
+
+    models = [models_by_id[key] for key in sorted(models_by_id)]
     default_model = DEFAULT_MODEL_KEY if any(model["id"] == DEFAULT_MODEL_KEY for model in models) else models[0]["id"]
     default_public_dir = public_root / default_model
     shutil.copyfile(default_public_dir / "meta.json", public_root / "meta.json")
