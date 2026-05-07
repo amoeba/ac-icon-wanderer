@@ -3,6 +3,7 @@ import path from "node:path"
 import { fileURLToPath } from "node:url"
 
 import { defineConfig } from "vite"
+import { normalizeHexReference } from "./hex.js"
 
 const ROOT_DIR = fileURLToPath(new URL(".", import.meta.url))
 const DATA_DIR = path.join(ROOT_DIR, "data")
@@ -16,24 +17,6 @@ function isSafeSegment(value) {
 
 function isSafeModelId(value) {
   return /^[a-z0-9-]+$/.test(value)
-}
-
-function normalizeHexReference(value) {
-  if (value == null) {
-    return null
-  }
-
-  const normalizedValue = String(value).trim()
-  if (!normalizedValue) {
-    return null
-  }
-
-  const hexDigits = normalizedValue.replace(/^0x/i, "")
-  if (!/^[0-9a-fA-F]+$/.test(hexDigits)) {
-    return null
-  }
-
-  return `0x${hexDigits.toUpperCase()}`
 }
 
 function sendJson(res, body, statusCode = 200) {

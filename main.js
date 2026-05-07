@@ -1,3 +1,5 @@
+import { normalizeHexReference } from "./hex.js"
+
 const ICONS_API = "/api/icon/"
 const EMBEDDINGS_API = "/api/embeddings/"
 const ICON_DETAIL_API = "/api/icon-detail/"
@@ -31,24 +33,6 @@ function setStatus(message) {
   if (status) {
     status.textContent = message ?? ""
   }
-}
-
-function normalizeHexReference(hexValue) {
-  if (hexValue == null) {
-    return null
-  }
-
-  const normalizedHex = String(hexValue).trim()
-  if (!normalizedHex) {
-    return null
-  }
-
-  const hexDigits = normalizedHex.replace(/^0x/i, "")
-  if (!/^[0-9a-fA-F]+$/.test(hexDigits)) {
-    return null
-  }
-
-  return `0x${hexDigits.toUpperCase()}`
 }
 
 function formatIconHex(hexValue) {

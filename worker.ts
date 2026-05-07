@@ -1,3 +1,5 @@
+import { normalizeHexReference } from "./hex.js";
+
 const ACEDB_BASE_URL = "https://acedb.treestats.net/ace_world_patches.json";
 
 function embeddingPath(modelId: string, suffix: string): string {
@@ -7,24 +9,6 @@ function embeddingPath(modelId: string, suffix: string): string {
 
 async function getObject(env, path: string) {
   return env.R2.get(path);
-}
-
-function normalizeHexReference(value: string | null | undefined): string | null {
-  if (value == null) {
-    return null;
-  }
-
-  const normalizedValue = String(value).trim();
-  if (!normalizedValue) {
-    return null;
-  }
-
-  const hexDigits = normalizedValue.replace(/^0x/i, "");
-  if (!/^[0-9a-fA-F]+$/.test(hexDigits)) {
-    return null;
-  }
-
-  return `0x${hexDigits.toUpperCase()}`;
 }
 
 function iconDetailUrl(iconId: string): string {
