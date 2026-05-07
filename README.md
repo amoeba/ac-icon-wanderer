@@ -20,17 +20,28 @@ $ ls data/icons | head
 0x06000FAA.png
 ```
 
-Then run `pixi run embed` to generate embeddings:
+Then run `pixi run embed` to generate similarity data for the built-in model set (`siglip2`, `clip`, and `phash-shape`):
 
 ```console
 $ pixi run embed
 ...
-  Embeddings : data/embeddings/embeddings.pt  (12496, 768)
-  Image IDs  : data/embeddings/image_ids.json
-  Nearest    : data/embeddings/nearest.json
+  Output root: data/embeddings
+  Models     : 3
 ```
 
-And then `pixi run export` to export the embeddings into the format used by the web app and upload them to R2:
+You can limit the run to specific presets:
+
+```sh
+pixi run embed --models clip,phash-shape
+```
+
+Or append extra Hugging Face image models:
+
+```sh
+pixi run embed --hf-model laion/CLIP-ViT-L-14-laion2B-s32B-b82K
+```
+
+Then run `pixi run export` to export per-model metadata, manifests, and nearest-neighbor files into the format used by the web app and R2:
 
 ```sh
 pixi run export
@@ -43,11 +54,17 @@ rclone copy data/icons/ r2:ac-icon-wanderer-assets/icons --progress
 rclone copy data/embeddings/ r2:ac-icon-wanderer-assets/embeddings --progress
 ```
 
+The app will expose a model picker so you can switch similarity backends in the UI without redeploying code.
+
 ## Development
 
 ```bash
 npm run dev
 ```
+
+In local development, Vite now serves the same `/api` routes directly from `data/icons` and `data/embeddings`, so you can test the app without uploading to R2 or deploying to Cloudflare first. As long as you've already run `pixi run embed` and `pixi run export`, the browser will use your local files.
+
+Production still uses the Worker + R2 path via `wrangler deploy`.
 
 ## Deploy
 

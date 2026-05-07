@@ -2,62 +2,19 @@
 <html>
   <head>
     <title>Icon Navigator</title>
-    <style>
-      body {
-        background: rgb(0, 0, 51);
-        margin: 0;
-        display: flex;
-        flex-direction: column;
-        gap: 1.5rem;
-        align-items: center;
-        justify-content: center;
-        min-height: 100vh;
-        color: white;
-        font-family: sans-serif;
-      }
-      .grid {
-        display: grid;
-        gap: 2px;
-        padding: 10px;
-      }
-      .cell {
-        width: 40px;
-        height: 40px;
-        position: relative;
-        cursor: pointer;
-      }
-      .cell:hover {
-        border-color: #666;
-      }
-      .cell img {
-        width: 100%;
-        height: 100%;
-        object-fit: contain;
-      }
-      footer {
-        display: flex;
-        flex-direction: row;
-        gap: 1.5rem;
-        color: rgb(141, 141, 141);
-      }
-      footer a {
-        color: inherit;
-      }
-      footer a:visited {
-        color: inherit;
-      }
-    </style>
-    <script type="module" src="/src/main.js"></script>
+    <link rel="stylesheet" href="/styles.css" />
+    <script type="module" src="/main.js"></script>
   </head>
   <body>
     <div id="grid" class="grid"></div>
-    <div>click an icon to update the display</div>
+    <div class="details">
+      <div>click an icon to update the display</div>
+    </div>
     <footer>
-      <div>
-        model:
-        <a href="https://huggingface.co/google/siglip2-base-patch16-224"
-          >google/siglip2-base-patch16-224</a
-        >
+      <div class="controls">
+        <label for="model-select">model:</label>
+        <select id="model-select"></select>
+        <span id="status" class="status">Loading...</span>
       </div>
       <div>
         <a href="https://github.com/amoeba/ac-icon-wanderer">source code</a>
