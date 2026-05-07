@@ -50,6 +50,7 @@ def export_model(spec, source_path: Path, output_path: Path) -> dict:
         "kind": spec.kind,
         "shape": shape,
         "image_count": len(image_ids),
+        "neighbor_count": len(nearest[0]) if nearest else 0,
         "description": spec.description,
         "model_id": spec.model_id,
     }

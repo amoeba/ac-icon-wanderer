@@ -7,6 +7,16 @@
   </head>
   <body>
     <div id="grid" class="grid"></div>
+    <section id="icon-detail" class="icon-detail" aria-live="polite">
+      <div class="icon-detail-row">
+        <span class="icon-detail-label">icon</span>
+        <span id="icon-detail-hex" class="icon-detail-value">Loading...</span>
+      </div>
+      <div class="icon-detail-row">
+        <span class="icon-detail-label">name</span>
+        <span id="icon-detail-name" class="icon-detail-value">Loading...</span>
+      </div>
+    </section>
     <div class="details">
       <div>click an icon to update the display</div>
     </div>
@@ -14,7 +24,6 @@
       <div class="controls">
         <label for="model-select">model:</label>
         <select id="model-select"></select>
-        <span id="status" class="status">Loading...</span>
       </div>
       <div>
         <a href="https://github.com/amoeba/ac-icon-wanderer">source code</a>

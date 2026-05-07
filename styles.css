@@ -1,4 +1,15 @@
 body {
+  --cell-size: 40px;
+  --grid-gap: 2px;
+  --grid-padding: 10px;
+  --grid-size: 11;
+  --detail-row-height: 1.25rem;
+  --detail-gap: 0.45rem;
+  --detail-padding-y: 0.75rem;
+  --details-line-height: 1.25rem;
+}
+
+body {
   background: rgb(0, 0, 51);
   margin: 0;
   display: flex;
@@ -43,19 +54,32 @@ select {
 
 .grid {
   display: grid;
-  gap: 2px;
-  padding: 10px;
+  gap: var(--grid-gap);
+  padding: var(--grid-padding);
+  box-sizing: border-box;
+  grid-template-columns: repeat(var(--grid-size), var(--cell-size));
+  grid-auto-rows: var(--cell-size);
+  inline-size: calc(
+    (var(--grid-size) * var(--cell-size)) +
+    ((var(--grid-size) - 1) * var(--grid-gap)) +
+    (2 * var(--grid-padding))
+  );
+  min-block-size: calc(
+    (var(--grid-size) * var(--cell-size)) +
+    ((var(--grid-size) - 1) * var(--grid-gap)) +
+    (2 * var(--grid-padding))
+  );
 }
 
 .cell {
-  width: 40px;
-  height: 40px;
-  min-width: 40px;
-  min-height: 40px;
-  max-width: 40px;
-  max-height: 40px;
+  width: var(--cell-size);
+  height: var(--cell-size);
+  min-width: var(--cell-size);
+  min-height: var(--cell-size);
+  max-width: var(--cell-size);
+  max-height: var(--cell-size);
   box-sizing: border-box;
-  flex: 0 0 40px;
+  flex: 0 0 var(--cell-size);
   position: relative;
   display: flex;
   align-items: center;
@@ -102,11 +126,49 @@ select {
   flex-direction: column;
   gap: 0.5rem;
   align-items: center;
+  min-height: var(--details-line-height);
 }
 
-#model-info {
-  margin: 0;
+.icon-detail {
+  min-width: 320px;
+  max-width: min(90vw, 420px);
+  display: grid;
+  gap: 0.45rem;
+  padding: 0.75rem 0.9rem;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.08);
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.12);
+  box-sizing: border-box;
+  min-height: calc(
+    (2 * var(--detail-row-height)) +
+    var(--detail-gap) +
+    (2 * var(--detail-padding-y))
+  );
+  align-content: start;
+}
+
+.icon-detail-row {
+  display: grid;
+  grid-template-columns: 56px minmax(0, 1fr);
+  gap: 0.65rem;
+  align-items: baseline;
+  min-height: var(--detail-row-height);
+}
+
+.icon-detail-label {
   color: rgb(141, 141, 141);
+  font-size: 0.85rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.icon-detail-value {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+#icon-detail-hex {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
 }
 
 footer {
@@ -116,6 +178,7 @@ footer {
   align-items: center;
   gap: 1.5rem;
   color: rgb(141, 141, 141);
+  min-height: calc(1.55rem + 0.7rem);
 }
 
 footer a {

@@ -1,7 +1,8 @@
 const ICONS_API = "/api/icon/";
 const EMBEDDINGS_API = "/api/embeddings/";
+const ICON_DETAIL_API = "/api/icon-detail/";
 const DEFAULT_MODEL_ID = "siglip2";
-const CELL_SIZE = 40;
+const DEFAULT_NEIGHBOR_COUNT = 100;
 
 let currentIconId = null;
 let currentModelId = null;
@@ -20,6 +21,36 @@ function setStatus(message) {
   const status = document.getElementById("status");
   if (status) {
     status.textContent = message;
+  }
+}
+
+function setIconDetail(hexValue, nameValue) {
+  const hexElement = document.getElementById("icon-detail-hex");
+  const nameElement = document.getElementById("icon-detail-name");
+  if (hexElement) {
+    hexElement.textContent = hexValue.startsWith("0x") ? hexValue : `0x${hexValue}`;
+  }
+  if (nameElement) {
+    nameElement.textContent = nameValue;
+  }
+}
+
+function gridSizeForNeighborCount(neighborCount) {
+  return Math.max(1, Math.ceil(Math.sqrt(Math.max(0, neighborCount) + 1)));
+}
+
+function reservedGridSizeForModel(model) {
+  return gridSizeForNeighborCount(
+    Number.isFinite(model?.neighbor_count)
+      ? model.neighbor_count
+      : DEFAULT_NEIGHBOR_COUNT,
+  );
+}
+
+function setGridSize(size) {
+  const grid = document.getElementById("grid");
+  if (grid) {
+    grid.style.setProperty("--grid-size", String(size));
   }
 }
 
@@ -67,6 +98,22 @@ async function loadNearest(modelId, iconId) {
   );
 }
 
+async function loadIconDetail(iconId) {
+  const response = await fetch(`${ICON_DETAIL_API}${encodeURIComponent(iconId)}`);
+  if (response.status === 404) {
+    return {
+      icon_hex: iconId,
+      name: "No database match",
+    };
+  }
+  if (!response.ok) {
+    throw new Error(
+      `Icon detail lookup failed: ${response.status} ${response.statusText}`,
+    );
+  }
+  return response.json();
+}
+
 function buildModelPicker() {
   const select = document.getElementById("model-select");
   select.innerHTML = "";
@@ -90,6 +137,8 @@ function randomIconId(ids) {
 
 async function switchModel(modelId) {
   currentModelId = modelId;
+  const model = manifest.models.find((candidate) => candidate.id === modelId);
+  setGridSize(reservedGridSizeForModel(model));
   const meta = await loadMeta(modelId);
   const ids = meta.image_ids;
 
@@ -113,17 +162,17 @@ async function showIcon(iconId) {
   }
 
   setStatus(`Loading ${iconId} with ${currentModelId}...`);
-  const similar = await loadNearest(currentModelId, iconId);
+  setIconDetail(iconId, "Loading...");
+  const [similar, detail] = await Promise.all([
+    loadNearest(currentModelId, iconId),
+    loadIconDetail(iconId),
+  ]);
 
   grid.innerHTML = "";
-  grid.style.gridTemplateColumns = "";
-  grid.style.gridAutoRows = "";
 
-  const total = similar.length + 1;
-  const size = Math.ceil(Math.sqrt(total));
+  const size = gridSizeForNeighborCount(similar.length);
   const center = Math.floor(size / 2);
-  grid.style.gridTemplateColumns = `repeat(${size}, ${CELL_SIZE}px)`;
-  grid.style.gridAutoRows = `${CELL_SIZE}px`;
+  setGridSize(size);
 
   const cells = Array.from({ length: size }, () => Array(size).fill(null));
   cells[center][center] = { iconId, isFocus: true };
@@ -183,7 +232,8 @@ async function showIcon(iconId) {
     }
   }
 
-  setStatus(`${iconId}`);
+  setStatus(currentModelId);
+  setIconDetail(detail.icon_hex ?? iconId, detail.name ?? "Unnamed");
 }
 
 async function main() {
@@ -195,6 +245,10 @@ async function main() {
   if (!currentModelId) {
     throw new Error("No embedding models available");
   }
+  const initialModel = manifestData.models.find(
+    (model) => model.id === currentModelId,
+  );
+  setGridSize(reservedGridSizeForModel(initialModel));
   await loadMeta(currentModelId);
   buildModelPicker();
   currentIconId = randomIconId(idsForCurrentModel());
