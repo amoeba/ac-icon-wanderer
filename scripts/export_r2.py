@@ -96,23 +96,12 @@ def main():
     if not raw_model_paths and not existing_exported_models:
         raise FileNotFoundError(f"No embedding outputs found in {root}")
 
-    exported_paths: list[tuple[str, Path]] = []
     models_by_id = dict(existing_exported_models)
     for spec, path in raw_model_paths:
-        output_path = path if path != root else root / spec.key
-        models_by_id[spec.key] = export_model(spec, path, output_path)
-        exported_paths.append((spec.key, output_path))
+        models_by_id[spec.key] = export_model(spec, path, path)
 
     models = [models_by_id[key] for key in sorted(models_by_id)]
     default_model = DEFAULT_MODEL_KEY if any(model["id"] == DEFAULT_MODEL_KEY for model in models) else models[0]["id"]
-    default_model_path = next(
-        (path for key, path in exported_paths if key == default_model),
-        root / default_model,
-    )
-
-    shutil.copyfile(default_model_path / "meta.json", root / "meta.json")
-    shutil.rmtree(root / "nearest", ignore_errors=True)
-    shutil.copytree(default_model_path / "nearest", root / "nearest")
 
     manifest = {
         "default_model": default_model,

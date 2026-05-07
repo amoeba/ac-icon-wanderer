@@ -4,10 +4,6 @@ function embeddingPath(modelId: string, suffix: string): string {
   return `embeddings/${modelId}/${suffix}`;
 }
 
-function defaultEmbeddingPath(suffix: string): string {
-  return `embeddings/${suffix}`;
-}
-
 async function getObject(env, path: string) {
   return env.R2.get(path);
 }
@@ -88,32 +84,6 @@ export default {
           });
         }
         return new Response("Manifest not found", { status: 404 });
-      }
-
-      if (url.pathname === "/api/embeddings/meta") {
-        const obj = await getObject(env, defaultEmbeddingPath("meta.json"));
-        if (obj) {
-          return new Response(obj.body, {
-            headers: { "Content-Type": "application/json" },
-          });
-        }
-        return new Response("Meta not found", { status: 404 });
-      }
-
-      if (url.pathname.startsWith("/api/embeddings/nearest/")) {
-        const iconId = url.pathname
-          .split("/api/embeddings/nearest/")[1]
-          .replace(/\.json$/, "");
-        const obj = await getObject(
-          env,
-          defaultEmbeddingPath(`nearest/${iconId}.json`),
-        );
-        if (obj) {
-          return new Response(obj.body, {
-            headers: { "Content-Type": "application/json" },
-          });
-        }
-        return new Response("Nearest not found", { status: 404 });
       }
 
       const match = url.pathname.match(

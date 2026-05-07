@@ -116,27 +116,6 @@ function localApiPlugin() {
             return
           }
 
-          if (pathname === "/api/embeddings/meta") {
-            await sendFile(res, path.join(EMBEDDINGS_DIR, "meta.json"), "application/json")
-            return
-          }
-
-          if (pathname.startsWith("/api/embeddings/nearest/")) {
-            const iconId = pathname
-              .slice("/api/embeddings/nearest/".length)
-              .replace(/\.json$/, "")
-            if (!isSafeSegment(iconId)) {
-              sendText(res, "Invalid icon id", 400)
-              return
-            }
-            await sendFile(
-              res,
-              path.join(EMBEDDINGS_DIR, "nearest", `${iconId}.json`),
-              "application/json",
-            )
-            return
-          }
-
           const modelMetaMatch = pathname.match(/^\/api\/embeddings\/([^/]+)\/meta$/)
           if (modelMetaMatch) {
             const modelId = decodeURIComponent(modelMetaMatch[1])

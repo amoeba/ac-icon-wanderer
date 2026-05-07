@@ -112,10 +112,6 @@ def main():
 
     models = [models_by_id[key] for key in sorted(models_by_id)]
     default_model = DEFAULT_MODEL_KEY if any(model["id"] == DEFAULT_MODEL_KEY for model in models) else models[0]["id"]
-    default_public_dir = public_root / default_model
-    shutil.copyfile(default_public_dir / "meta.json", public_root / "meta.json")
-    shutil.rmtree(public_root / "nearest", ignore_errors=True)
-    shutil.copytree(default_public_dir / "nearest", public_root / "nearest")
 
     manifest = {
         "default_model": default_model,
