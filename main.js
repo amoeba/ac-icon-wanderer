@@ -3,7 +3,8 @@ const EMBEDDINGS_API = "/api/embeddings/"
 const ICON_DETAIL_API = "/api/icon-detail/"
 const DEFAULT_MODEL_ID = "siglip2"
 const DEFAULT_NEIGHBOR_COUNT = 100
-const FLIP_DURATION_MS = 900
+const FLIP_DURATION_MS = 1400
+const FLIP_STAGGER_MAX_MS = 500
 
 let currentIconId = null
 let currentModelId = null
@@ -239,6 +240,7 @@ function applyCellState(cell, data, notifyMissingIcon) {
 function resetFlippedCard(card) {
   card.classList.add("is-resetting")
   card.classList.remove("is-flipping")
+  card.style.removeProperty("--flip-delay")
   void card.offsetWidth
   card.classList.remove("is-resetting")
 }
@@ -383,16 +385,20 @@ async function renderGridCells(grid, cells, notifyMissingIcon, isCurrentRender) 
 
   if (flipTargets.length) {
     await new Promise((resolve) => window.requestAnimationFrame(resolve))
+    let maxDelay = 0
 
     for (const target of flipTargets) {
       if (!target.card) {
         continue
       }
+      const delay = Math.floor(Math.random() * (FLIP_STAGGER_MAX_MS + 1))
+      maxDelay = Math.max(maxDelay, delay)
+      target.card.style.setProperty("--flip-delay", `${delay}ms`)
       void target.card.offsetWidth
       target.card.classList.add("is-flipping")
     }
 
-    await wait(FLIP_DURATION_MS + 40)
+    await wait(FLIP_DURATION_MS + maxDelay + 60)
   }
 
   if (!isCurrentRender()) {
