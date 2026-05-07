@@ -9,6 +9,12 @@ let currentModelId = null;
 let manifest = null;
 const metaCache = new Map();
 
+function createRequestError(message, details = {}) {
+  const error = new Error(message);
+  Object.assign(error, details);
+  return error;
+}
+
 function currentMeta() {
   return metaCache.get(currentModelId);
 }
@@ -20,18 +26,37 @@ function idsForCurrentModel() {
 function setStatus(message) {
   const status = document.getElementById("status");
   if (status) {
-    status.textContent = message;
+    status.textContent = message ?? "";
   }
+}
+
+function formatIconHex(hexValue) {
+  if (hexValue == null) {
+    return "Unavailable";
+  }
+
+  const normalizedHex = String(hexValue);
+  if (
+    normalizedHex === "Unavailable" ||
+    normalizedHex === "Loading..." ||
+    normalizedHex === "----"
+  ) {
+    return normalizedHex;
+  }
+
+  return normalizedHex.startsWith("0x")
+    ? normalizedHex
+    : `0x${normalizedHex}`;
 }
 
 function setIconDetail(hexValue, nameValue) {
   const hexElement = document.getElementById("icon-detail-hex");
   const nameElement = document.getElementById("icon-detail-name");
   if (hexElement) {
-    hexElement.textContent = hexValue.startsWith("0x") ? hexValue : `0x${hexValue}`;
+    hexElement.textContent = formatIconHex(hexValue);
   }
   if (nameElement) {
-    nameElement.textContent = nameValue;
+    nameElement.textContent = nameValue ?? "Unavailable";
   }
 }
 
@@ -54,18 +79,75 @@ function setGridSize(size) {
   }
 }
 
+function setModelPickerEnabled(enabled) {
+  const select = document.getElementById("model-select");
+  if (select) {
+    select.disabled = !enabled;
+  }
+}
+
+function renderGridNotice(message) {
+  const grid = document.getElementById("grid");
+  if (!grid) {
+    return;
+  }
+
+  grid.innerHTML = "";
+  setGridSize(1);
+
+  const notice = document.createElement("div");
+  notice.className = "grid-notice";
+  notice.textContent = message;
+  grid.appendChild(notice);
+}
+
+function fallbackLabel(iconId) {
+  return String(iconId ?? "?").slice(-2).toUpperCase();
+}
+
+function appendCellVisual(cell, iconId, notifyMissingIcon) {
+  const fallback = document.createElement("span");
+  fallback.className = "cell-fallback";
+  fallback.textContent = fallbackLabel(iconId);
+  fallback.hidden = true;
+
+  const img = document.createElement("img");
+  img.src = ICONS_API + iconId;
+  img.alt = iconId;
+  img.addEventListener("error", () => {
+    cell.classList.add("missing");
+    img.remove();
+    fallback.hidden = false;
+    notifyMissingIcon();
+  });
+
+  cell.appendChild(fallback);
+  cell.appendChild(img);
+}
+
 async function fetchJson(path) {
-  const response = await fetch(path);
+  let response;
+  try {
+    response = await fetch(path);
+  } catch {
+    throw createRequestError("API unavailable", { code: "network" });
+  }
+
   if (!response.ok) {
-    throw new Error(
-      `Request failed: ${response.status} ${response.statusText}`,
+    throw createRequestError(
+      response.status === 404 ? "Data unavailable" : "API unavailable",
+      { status: response.status },
     );
   }
+
   return response.json();
 }
 
 async function loadManifest() {
   manifest = await fetchJson(`${EMBEDDINGS_API}models`);
+  if (!Array.isArray(manifest?.models)) {
+    throw createRequestError("Data unavailable", { code: "invalid-manifest" });
+  }
   return manifest;
 }
 
@@ -84,10 +166,13 @@ function initialModelId(models, manifestDefaultModel) {
 
 async function loadMeta(modelId) {
   if (!metaCache.has(modelId)) {
-    metaCache.set(
-      modelId,
-      await fetchJson(`${EMBEDDINGS_API}${encodeURIComponent(modelId)}/meta`),
+    const meta = await fetchJson(
+      `${EMBEDDINGS_API}${encodeURIComponent(modelId)}/meta`,
     );
+    if (!Array.isArray(meta?.image_ids)) {
+      throw createRequestError("Model unavailable", { code: "invalid-meta" });
+    }
+    metaCache.set(modelId, meta);
   }
   return metaCache.get(modelId);
 }
@@ -99,18 +184,46 @@ async function loadNearest(modelId, iconId) {
 }
 
 async function loadIconDetail(iconId) {
-  const response = await fetch(`${ICON_DETAIL_API}${encodeURIComponent(iconId)}`);
-  if (response.status === 404) {
+  let response;
+  try {
+    response = await fetch(`${ICON_DETAIL_API}${encodeURIComponent(iconId)}`);
+  } catch {
     return {
       icon_hex: iconId,
-      name: "No database match",
+      name: "Unavailable",
     };
   }
-  if (!response.ok) {
-    throw new Error(
-      `Icon detail lookup failed: ${response.status} ${response.statusText}`,
-    );
+
+  if (response.status === 404) {
+    const contentType = response.headers.get("content-type") ?? "";
+    if (!contentType.includes("application/json")) {
+      return {
+        icon_hex: iconId,
+        name: "Unavailable",
+      };
+    }
+
+    try {
+      const detail = await response.json();
+      return {
+        icon_hex: detail.icon_hex ?? iconId,
+        name: detail.name ?? "No database match",
+      };
+    } catch {
+      return {
+        icon_hex: iconId,
+        name: "Unavailable",
+      };
+    }
   }
+
+  if (!response.ok) {
+    return {
+      icon_hex: iconId,
+      name: "Unavailable",
+    };
+  }
+
   return response.json();
 }
 
@@ -136,11 +249,28 @@ function randomIconId(ids) {
 }
 
 async function switchModel(modelId) {
+  const previousModelId = currentModelId;
   currentModelId = modelId;
   const model = manifest.models.find((candidate) => candidate.id === modelId);
   setGridSize(reservedGridSizeForModel(model));
-  const meta = await loadMeta(modelId);
+
+  let meta;
+  try {
+    meta = await loadMeta(modelId);
+  } catch (error) {
+    currentModelId = previousModelId;
+    document.getElementById("model-select").value = previousModelId ?? "";
+    setStatus(error.message);
+    return;
+  }
+
   const ids = meta.image_ids;
+  if (!ids.length) {
+    currentModelId = previousModelId;
+    document.getElementById("model-select").value = previousModelId ?? "";
+    setStatus("No icons available");
+    return;
+  }
 
   if (!ids.includes(currentIconId)) {
     currentIconId = randomIconId(ids);
@@ -158,21 +288,41 @@ async function showIcon(iconId) {
   const focusIndex = ids.indexOf(iconId);
 
   if (focusIndex === -1) {
-    throw new Error(`Unknown icon id for ${currentModelId}: ${iconId}`);
+    renderGridNotice("Icon unavailable");
+    setStatus("Icon unavailable");
+    setIconDetail(iconId, "Unavailable");
+    return;
   }
 
   setStatus(`Loading ${iconId} with ${currentModelId}...`);
   setIconDetail(iconId, "Loading...");
-  const [similar, detail] = await Promise.all([
+  const [similarResult, detailResult] = await Promise.allSettled([
     loadNearest(currentModelId, iconId),
     loadIconDetail(iconId),
   ]);
+
+  const similarValue = similarResult.status === "fulfilled"
+    ? similarResult.value
+    : null;
+  const similar = Array.isArray(similarValue) ? similarValue : [];
+  const detail = detailResult.status === "fulfilled"
+    ? detailResult.value
+    : { icon_hex: iconId, name: "Unavailable" };
 
   grid.innerHTML = "";
 
   const size = gridSizeForNeighborCount(similar.length);
   const center = Math.floor(size / 2);
   setGridSize(size);
+
+  let missingIconsNotified = false;
+  const notifyMissingIcon = () => {
+    if (missingIconsNotified) {
+      return;
+    }
+    missingIconsNotified = true;
+    setStatus("Some icons unavailable");
+  };
 
   const cells = Array.from({ length: size }, () => Array(size).fill(null));
   cells[center][center] = { iconId, isFocus: true };
@@ -198,6 +348,9 @@ async function showIcon(iconId) {
   ) {
     const [row, col] = positions[index];
     const neighborId = ids[similar[index]];
+    if (!neighborId) {
+      continue;
+    }
     cells[row][col] = { iconId: neighborId, isFocus: false };
   }
 
@@ -214,10 +367,6 @@ async function showIcon(iconId) {
         cell.style.visibility = "hidden";
         cell.disabled = true;
       } else {
-        const img = document.createElement("img");
-        img.src = ICONS_API + data.iconId;
-        img.alt = data.iconId;
-
         if (data.isFocus) {
           cell.classList.add("focus");
           cell.disabled = true;
@@ -225,32 +374,46 @@ async function showIcon(iconId) {
           cell.onclick = () => showIcon(data.iconId);
         }
 
-        cell.appendChild(img);
+        appendCellVisual(cell, data.iconId, notifyMissingIcon);
       }
 
       grid.appendChild(cell);
     }
   }
 
-  setStatus(currentModelId);
+  if (similarResult.status === "rejected") {
+    setStatus("Related icons unavailable");
+  } else {
+    setStatus("");
+  }
   setIconDetail(detail.icon_hex ?? iconId, detail.name ?? "Unnamed");
 }
 
 async function main() {
+  setStatus("Loading...");
+  setModelPickerEnabled(false);
+
   const manifestData = await loadManifest();
   currentModelId = initialModelId(
     manifestData.models,
     manifestData.default_model,
   );
   if (!currentModelId) {
-    throw new Error("No embedding models available");
+    throw new Error("No models available");
   }
+
   const initialModel = manifestData.models.find(
     (model) => model.id === currentModelId,
   );
   setGridSize(reservedGridSizeForModel(initialModel));
-  await loadMeta(currentModelId);
+
+  const meta = await loadMeta(currentModelId);
+  if (!meta.image_ids.length) {
+    throw new Error("No icons available");
+  }
+
   buildModelPicker();
+  setModelPickerEnabled(true);
   currentIconId = randomIconId(idsForCurrentModel());
   await showIcon(currentIconId);
 }
@@ -258,4 +421,7 @@ async function main() {
 main().catch((error) => {
   console.error(error);
   setStatus(error.message);
+  setModelPickerEnabled(false);
+  renderGridNotice(error.message);
+  setIconDetail(null, "Unavailable");
 });

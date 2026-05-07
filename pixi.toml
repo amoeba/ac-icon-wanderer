@@ -5,18 +5,11 @@ channels = ["conda-forge"]
 platforms = ["osx-arm64"]
 
 [tasks.export]
-cmd = "python scripts/export_r2.py"
+cmd = "python scripts/export.py"
 env = { KMP_DUPLICATE_LIB_OK = "TRUE" }
 
 [tasks.embed]
 cmd = "python scripts/embed.py --image_dir ./data/icons --output_dir ./data/embeddings"
-env = { KMP_DUPLICATE_LIB_OK = "TRUE" }
-
-[tasks.upload-icons]
-cmd = "node scripts/r2-upload.js data/icons"
-
-[tasks.upload-embeddings]
-cmd = "python scripts/export_r2.py"
 env = { KMP_DUPLICATE_LIB_OK = "TRUE" }
 
 [dependencies]

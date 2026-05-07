@@ -156,6 +156,7 @@ function localApiPlugin() {
   }
 }
 
-export default defineConfig({
+export default defineConfig(({ command }) => ({
   plugins: [localApiPlugin()],
-})
+  publicDir: command === "serve" ? "public" : false,
+}))

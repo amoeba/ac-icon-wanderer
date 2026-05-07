@@ -41,13 +41,13 @@ Or append extra Hugging Face image models:
 pixi run embed --hf-model laion/CLIP-ViT-L-14-laion2B-s32B-b82K
 ```
 
-Then run `pixi run export` to export per-model metadata, manifests, and nearest-neighbor files into the format used by the web app and R2:
+Then run `pixi run export` to export per-model metadata, manifests, and nearest-neighbor files into the format used by the app:
 
 ```sh
 pixi run export
 ```
 
-And then upload them to R2:
+Then upload them with `rclone`:
 
 ```sh
 rclone copy data/icons/ r2:ac-icon-wanderer-assets/icons --progress
@@ -62,7 +62,7 @@ The app will expose a model picker so you can switch similarity backends in the 
 npm run dev
 ```
 
-In local development, Vite now serves the same `/api` routes directly from `data/icons` and `data/embeddings`, so you can test the app without uploading to R2 or deploying to Cloudflare first. As long as you've already run `pixi run embed` and `pixi run export`, the browser will use your local files.
+In local development, Vite now serves the same `/api` routes directly from `data/icons` and `data/embeddings`, so you can test the app without uploading anything or deploying to Cloudflare first. As long as you've already run `pixi run embed` and `pixi run export`, the browser will use your local files.
 
 Production still uses the Worker + R2 path via `wrangler deploy`.
 

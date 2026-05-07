@@ -1,7 +1,8 @@
 const ACEDB_BASE_URL = "https://acedb.treestats.net/ace_world_patches.json";
 
 function embeddingPath(modelId: string, suffix: string): string {
-  return `embeddings/${modelId}/${suffix}`;
+  const normalizedSuffix = suffix === "meta" ? "meta.json" : suffix;
+  return `embeddings/${modelId}/${normalizedSuffix}`;
 }
 
 async function getObject(env, path: string) {

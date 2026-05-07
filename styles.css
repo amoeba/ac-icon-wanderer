@@ -48,8 +48,15 @@ select {
   font: inherit;
 }
 
+select:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+}
+
 .status {
   color: rgb(141, 141, 141);
+  min-height: var(--details-line-height);
+  text-align: center;
 }
 
 .grid {
@@ -111,6 +118,10 @@ select {
   background: rgba(54, 38, 8, 0.55);
 }
 
+.cell.missing {
+  background: rgba(36, 38, 46, 0.9);
+}
+
 .cell img {
   width: 100%;
   height: 100%;
@@ -119,6 +130,44 @@ select {
   display: block;
   object-fit: contain;
   image-rendering: pixelated;
+}
+
+.cell-fallback {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  padding: 0.25rem;
+  box-sizing: border-box;
+  color: rgba(255, 255, 255, 0.72);
+  font-size: 0.62rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  line-height: 1;
+  text-align: center;
+}
+
+.cell-fallback[hidden] {
+  display: none;
+}
+
+.cell.focus .cell-fallback {
+  color: #fcd34d;
+}
+
+.grid-notice {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100%;
+  padding: 1rem;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.06);
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.1);
+  color: rgb(141, 141, 141);
+  text-align: center;
+  box-sizing: border-box;
 }
 
 .details {
