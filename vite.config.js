@@ -1,4 +1,4 @@
-import { readFile } from "node:fs/promises"
+import { copyFile, readFile } from "node:fs/promises"
 import path from "node:path"
 import { fileURLToPath } from "node:url"
 
@@ -9,7 +9,12 @@ const ROOT_DIR = fileURLToPath(new URL(".", import.meta.url))
 const DATA_DIR = path.join(ROOT_DIR, "data")
 const ICONS_DIR = path.join(DATA_DIR, "icons")
 const EMBEDDINGS_DIR = path.join(DATA_DIR, "embeddings")
+const PUBLIC_DIR = path.join(ROOT_DIR, "public")
 const ACEDB_BASE_URL = "https://acedb.treestats.net/ace_world_patches.json"
+const STATIC_ASSET_FILES = new Map([
+  ["og-image.png", "image/png"],
+  ["og-image.svg", "image/svg+xml"],
+])
 
 function isSafeSegment(value) {
   return /^[a-zA-Z0-9_-]+$/.test(value)
@@ -57,6 +62,51 @@ async function sendFile(res, filePath, contentType) {
       return
     }
     throw error
+  }
+}
+
+function staticAssetPath(pathname) {
+  const assetName = pathname.replace(/^\/+/, "")
+  if (!STATIC_ASSET_FILES.has(assetName)) {
+    return null
+  }
+  return {
+    assetName,
+    contentType: STATIC_ASSET_FILES.get(assetName),
+    filePath: path.join(PUBLIC_DIR, assetName),
+  }
+}
+
+function staticAssetPlugin() {
+  return {
+    name: "static-asset-plugin",
+    configureServer(server) {
+      server.middlewares.use(async (req, res, next) => {
+        const url = new URL(req.url ?? "/", "http://localhost")
+        const asset = staticAssetPath(url.pathname)
+        if (!asset) {
+          next()
+          return
+        }
+
+        try {
+          await sendFile(res, asset.filePath, asset.contentType)
+        } catch (error) {
+          next(error)
+        }
+      })
+    },
+    async writeBundle(options) {
+      const outDir = path.resolve(ROOT_DIR, options.dir ?? "dist")
+      await Promise.all(
+        [...STATIC_ASSET_FILES.keys()].map((assetName) =>
+          copyFile(
+            path.join(PUBLIC_DIR, assetName),
+            path.join(outDir, assetName),
+          ),
+        ),
+      )
+    },
   }
 }
 
@@ -159,6 +209,9 @@ function localApiPlugin() {
 }
 
 export default defineConfig(() => ({
-  plugins: [localApiPlugin()],
-  publicDir: "public",
+  plugins: [staticAssetPlugin(), localApiPlugin()],
+  publicDir: false,
+  build: {
+    emptyOutDir: true,
+  },
 }))
