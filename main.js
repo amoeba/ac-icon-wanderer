@@ -1,4 +1,12 @@
 import { normalizeHexReference } from "./hex.js"
+import {
+  filterHistoryEntries,
+  historyEntryKey,
+  ICON_HISTORY_STORAGE_KEY,
+  recordHistoryEntry,
+  removeHistoryEntry,
+  sanitizeHistoryEntries,
+} from "./history.js"
 
 const ICONS_API = "/api/icon/"
 const EMBEDDINGS_API = "/api/embeddings/"
@@ -7,12 +15,20 @@ const DEFAULT_MODEL_ID = "siglip2"
 const DEFAULT_NEIGHBOR_COUNT = 100
 const FLIP_DURATION_MS = 1400
 const FLIP_STAGGER_MAX_MS = 500
+const HISTORY_VISIBLE_SLOT_COUNT = 8
+const TOOLTIP_OFFSET_PX = 10
 
 let currentIconId = null
 let currentModelId = null
 let manifest = null
 let navigationGeneration = 0
+let iconHistory = []
+let iconHistoryLoaded = false
+let iconHistoryError = null
 const metaCache = new Map()
+const iconDetailCache = new Map()
+let activeTooltipTarget = null
+let tooltipRequestId = 0
 
 function createRequestError(message, details = {}) {
   const error = new Error(message)
@@ -52,15 +68,301 @@ function formatIconHex(hexValue) {
   return normalizeHexReference(normalizedHex) ?? normalizedHex
 }
 
-function setIconDetail(hexValue, nameValue) {
-  const hexElement = document.getElementById("icon-detail-hex")
-  const nameElement = document.getElementById("icon-detail-name")
-  if (hexElement) {
-    hexElement.textContent = formatIconHex(hexValue)
+function modelLabel(modelId) {
+  return manifest?.models?.find((model) => model.id === modelId)?.label ?? modelId
+}
+
+function historyEntriesEqual(leftEntries, rightEntries) {
+  if (leftEntries.length !== rightEntries.length) {
+    return false
   }
-  if (nameElement) {
-    nameElement.textContent = nameValue ?? "Unavailable"
+
+  return leftEntries.every(
+    (entry, index) => historyEntryKey(entry) === historyEntryKey(rightEntries[index]),
+  )
+}
+
+function createHistoryPlaceholder(state) {
+  const slot = document.createElement("div")
+  slot.className = "history-slot history-slot-placeholder"
+  slot.dataset.state = state
+  slot.setAttribute("aria-hidden", "true")
+  return slot
+}
+
+function appendIconVisual(container, target, iconId, onMissing = () => {}) {
+  const fallback = document.createElement("span")
+  fallback.className = "cell-fallback"
+  fallback.textContent = fallbackLabel(iconId)
+  fallback.hidden = true
+
+  const img = document.createElement("img")
+  img.src = `${ICONS_API}${iconId}`
+  img.alt = iconId
+  img.addEventListener("error", () => {
+    target.classList.add("missing")
+    img.remove()
+    fallback.hidden = false
+    onMissing()
+  })
+
+  container.replaceChildren(fallback, img)
+}
+
+function tooltipElements() {
+  return {
+    root: document.getElementById("icon-tooltip"),
+    hex: document.getElementById("icon-tooltip-hex"),
+    name: document.getElementById("icon-tooltip-name"),
   }
+}
+
+function positionTooltip(target) {
+  const { root } = tooltipElements()
+  if (!root || root.hidden) {
+    return
+  }
+
+  const rect = target.getBoundingClientRect()
+  const tooltipRect = root.getBoundingClientRect()
+  const maxLeft = Math.max(window.innerWidth - tooltipRect.width - 8, 8)
+  const centeredLeft = rect.left + ((rect.width - tooltipRect.width) / 2)
+  const left = Math.min(Math.max(8, centeredLeft), maxLeft)
+  const preferredTop = rect.top - tooltipRect.height - TOOLTIP_OFFSET_PX
+  const top = preferredTop >= 8
+    ? preferredTop
+    : Math.min(
+        rect.bottom + TOOLTIP_OFFSET_PX,
+        window.innerHeight - tooltipRect.height - 8,
+      )
+
+  root.style.left = `${left}px`
+  root.style.top = `${top}px`
+}
+
+function showTooltip(target, hexValue, nameValue) {
+  const { root, hex, name } = tooltipElements()
+  if (!root || !hex || !name) {
+    return
+  }
+
+  activeTooltipTarget = target
+  hex.textContent = formatIconHex(hexValue)
+  name.textContent = nameValue ?? "Unavailable"
+  root.hidden = false
+  positionTooltip(target)
+}
+
+function hideTooltip(target = activeTooltipTarget) {
+  if (target && activeTooltipTarget !== target) {
+    return
+  }
+
+  const { root } = tooltipElements()
+  if (!root) {
+    return
+  }
+
+  activeTooltipTarget = null
+  root.hidden = true
+}
+
+async function populateTooltip(target, iconId) {
+  const requestId = tooltipRequestId + 1
+  tooltipRequestId = requestId
+  showTooltip(target, iconId, "Loading...")
+
+  const detail = await loadIconDetail(iconId)
+  if (activeTooltipTarget !== target || requestId !== tooltipRequestId) {
+    return
+  }
+
+  showTooltip(
+    target,
+    detail.icon_hex ?? iconId,
+    detail.name ?? "Unavailable",
+  )
+}
+
+function clearTooltipBindings(target) {
+  target.onmouseenter = null
+  target.onmouseleave = null
+  target.onfocus = null
+  target.onblur = null
+  if (activeTooltipTarget === target) {
+    hideTooltip(target)
+  }
+}
+
+function bindTooltip(target, iconId) {
+  clearTooltipBindings(target)
+  target.onmouseenter = () => {
+    void populateTooltip(target, iconId)
+  }
+  target.onmouseleave = () => {
+    hideTooltip(target)
+  }
+  target.onfocus = () => {
+    void populateTooltip(target, iconId)
+  }
+  target.onblur = () => {
+    hideTooltip(target)
+  }
+}
+
+async function navigateToHistoryEntry(entry) {
+  if (!manifest?.models || !entry?.iconId || !entry?.modelId) {
+    return
+  }
+
+  if (entry.modelId !== currentModelId) {
+    await switchModel(entry.modelId, {
+      preferredIconId: entry.iconId,
+      recordHistory: true,
+    })
+    return
+  }
+
+  await showIcon(entry.iconId, { recordHistory: true })
+}
+
+function createHistoryButton(entry) {
+  const button = document.createElement("button")
+  const appReady = Boolean(manifest?.models)
+
+  button.className = "history-slot history-entry"
+  button.type = "button"
+  button.role = "listitem"
+  button.disabled = !appReady
+  button.title = `${entry.iconId} (${modelLabel(entry.modelId)})`
+  button.setAttribute(
+    "aria-label",
+    `Show ${entry.iconId} from ${modelLabel(entry.modelId)}`,
+  )
+  button.onclick = async () => {
+    await navigateToHistoryEntry(entry)
+  }
+  bindTooltip(button, entry.iconId)
+
+  appendIconVisual(button, button, entry.iconId)
+  return button
+}
+
+function renderIconHistory() {
+  const section = document.getElementById("icon-history")
+  const strip = document.getElementById("icon-history-strip")
+  if (!section || !strip) {
+    return
+  }
+
+  const historyState = iconHistoryLoaded
+    ? iconHistoryError
+      ? iconHistoryError
+      : iconHistory.length
+        ? `${iconHistory.length} saved`
+        : "No saved icons yet"
+    : "Loading..."
+  section.dataset.loaded = String(iconHistoryLoaded)
+  section.dataset.empty = String(iconHistory.length === 0)
+  section.dataset.error = String(Boolean(iconHistoryError))
+  section.setAttribute("title", historyState)
+
+  const slots = [...iconHistory]
+    .reverse()
+    .map((entry) => createHistoryButton(entry))
+  const placeholderCount = Math.max(HISTORY_VISIBLE_SLOT_COUNT - slots.length, 0)
+  const placeholderState = iconHistoryLoaded ? "empty" : "loading"
+  const placeholders = []
+  for (let index = 0; index < placeholderCount; index += 1) {
+    placeholders.push(createHistoryPlaceholder(placeholderState))
+  }
+
+  strip.replaceChildren(...placeholders, ...slots)
+  window.requestAnimationFrame(() => {
+    strip.scrollLeft = strip.scrollWidth
+  })
+}
+
+function saveIconHistory() {
+  const serializedHistory = JSON.stringify(iconHistory)
+
+  try {
+    window.localStorage.setItem(ICON_HISTORY_STORAGE_KEY, serializedHistory)
+    iconHistoryError = null
+  } catch (error) {
+    console.error("Failed to save icon history", error)
+    iconHistoryError = "History unavailable"
+  }
+
+  renderIconHistory()
+}
+
+function loadSavedHistory() {
+  renderIconHistory()
+
+  try {
+    const savedHistory = window.localStorage.getItem(ICON_HISTORY_STORAGE_KEY)
+    const parsedHistory = savedHistory == null ? [] : JSON.parse(savedHistory)
+    iconHistory = sanitizeHistoryEntries(parsedHistory)
+    iconHistoryError = null
+  } catch (error) {
+    console.error("Failed to load icon history", error)
+    iconHistory = []
+    iconHistoryError = "History unavailable"
+  }
+
+  iconHistoryLoaded = true
+  renderIconHistory()
+}
+
+function syncHistoryWithManifest() {
+  if (!manifest?.models) {
+    return
+  }
+
+  const filteredHistory = filterHistoryEntries(
+    iconHistory,
+    new Set(manifest.models.map((model) => model.id)),
+  )
+
+  if (!historyEntriesEqual(iconHistory, filteredHistory)) {
+    iconHistory = filteredHistory
+    saveIconHistory()
+    return
+  }
+
+  renderIconHistory()
+}
+
+function updateIconHistory(
+  nextIconId,
+  nextModelId,
+  { recordPrevious = false, previousSelection = null } = {},
+) {
+  let nextHistory = removeHistoryEntry(iconHistory, {
+    iconId: nextIconId,
+    modelId: nextModelId,
+  })
+
+  if (
+    recordPrevious &&
+    previousSelection?.iconId &&
+    previousSelection?.modelId &&
+    (
+      previousSelection.iconId !== nextIconId ||
+      previousSelection.modelId !== nextModelId
+    )
+  ) {
+    nextHistory = recordHistoryEntry(nextHistory, previousSelection)
+  }
+
+  if (historyEntriesEqual(iconHistory, nextHistory)) {
+    renderIconHistory()
+    return
+  }
+
+  iconHistory = nextHistory
+  saveIconHistory()
 }
 
 function gridSizeForNeighborCount(neighborCount) {
@@ -120,25 +422,6 @@ function cellStateKey(data) {
     return ""
   }
   return `${data.iconId}:${data.isFocus ? "focus" : "neighbor"}`
-}
-
-function appendCellVisual(container, cell, iconId, notifyMissingIcon) {
-  const fallback = document.createElement("span")
-  fallback.className = "cell-fallback"
-  fallback.textContent = fallbackLabel(iconId)
-  fallback.hidden = true
-
-  const img = document.createElement("img")
-  img.src = `${ICONS_API}${iconId}`
-  img.alt = iconId
-  img.addEventListener("error", () => {
-    cell.classList.add("missing")
-    img.remove()
-    fallback.hidden = false
-    notifyMissingIcon()
-  })
-
-  container.replaceChildren(fallback, img)
 }
 
 function cardFaces(card) {
@@ -219,6 +502,7 @@ function applyCellState(cell, data, notifyMissingIcon) {
   cell.onclick = null
 
   if (!data?.iconId) {
+    clearTooltipBindings(cell)
     front.replaceChildren()
     back.replaceChildren()
     cell.disabled = true
@@ -228,13 +512,14 @@ function applyCellState(cell, data, notifyMissingIcon) {
   }
 
   cell.style.visibility = "visible"
-  cell.disabled = Boolean(data.isFocus)
+  cell.disabled = false
+  bindTooltip(cell, data.iconId)
 
   if (!data.isFocus) {
-    cell.onclick = () => showIcon(data.iconId)
+    cell.onclick = () => showIcon(data.iconId, { recordHistory: true })
   }
 
-  appendCellVisual(front, cell, data.iconId, notifyMissingIcon)
+  appendIconVisual(front, cell, data.iconId, notifyMissingIcon)
   back.replaceChildren()
   cell.dataset.stateKey = cellStateKey(data)
 }
@@ -265,6 +550,7 @@ function finalizeFlippedCell(cell, data, notifyMissingIcon) {
   cell.onclick = null
 
   if (!data?.iconId) {
+    clearTooltipBindings(cell)
     front.replaceChildren()
     resetFlippedCard(card)
     back.replaceChildren()
@@ -275,13 +561,14 @@ function finalizeFlippedCell(cell, data, notifyMissingIcon) {
   }
 
   cell.style.visibility = "visible"
-  cell.disabled = Boolean(data.isFocus)
+  cell.disabled = false
+  bindTooltip(cell, data.iconId)
 
   if (!data.isFocus) {
-    cell.onclick = () => showIcon(data.iconId)
+    cell.onclick = () => showIcon(data.iconId, { recordHistory: true })
   }
 
-  appendCellVisual(front, cell, data.iconId, notifyMissingIcon)
+  appendIconVisual(front, cell, data.iconId, notifyMissingIcon)
   resetFlippedCard(card)
   back.replaceChildren()
   cell.dataset.stateKey = cellStateKey(data)
@@ -334,7 +621,7 @@ async function flipCell(cell, data, notifyMissingIcon, isCurrentRender) {
   cell.style.visibility = "visible"
   back.replaceChildren()
   if (data?.iconId) {
-    appendCellVisual(back, cell, data.iconId, notifyMissingIcon)
+    appendIconVisual(back, cell, data.iconId, notifyMissingIcon)
   }
 
   // Force layout so the browser treats the class toggle as a transition.
@@ -379,7 +666,7 @@ async function renderGridCells(grid, cells, notifyMissingIcon, isCurrentRender) 
         if (back) {
           back.replaceChildren()
           if (data?.iconId) {
-            appendCellVisual(back, cell, data.iconId, notifyMissingIcon)
+            appendIconVisual(back, cell, data.iconId, notifyMissingIcon)
           }
         }
 
@@ -481,48 +768,70 @@ async function loadNearest(modelId, iconId) {
 
 async function loadIconDetail(iconId) {
   const iconHex = normalizeHexReference(iconId) ?? String(iconId)
-  let response
-  try {
-    response = await fetch(`${ICON_DETAIL_API}${encodeURIComponent(iconHex)}`)
-  } catch {
-    return {
-      icon_hex: iconHex,
-      name: "Unavailable",
-    }
+  if (!iconDetailCache.has(iconHex)) {
+    iconDetailCache.set(iconHex, (async () => {
+      let response
+      try {
+        response = await fetch(`${ICON_DETAIL_API}${encodeURIComponent(iconHex)}`)
+      } catch {
+        return {
+          icon_hex: iconHex,
+          name: "Unavailable",
+        }
+      }
+
+      if (response.status === 404) {
+        const contentType = response.headers.get("content-type") ?? ""
+        if (!contentType.includes("application/json")) {
+          return {
+            icon_hex: iconHex,
+            name: "Unavailable",
+          }
+        }
+
+        try {
+          const detail = await response.json()
+          return {
+            icon_hex: detail.icon_hex ?? iconHex,
+            name: detail.name ?? "No database match",
+          }
+        } catch {
+          return {
+            icon_hex: iconHex,
+            name: "Unavailable",
+          }
+        }
+      }
+
+      if (!response.ok) {
+        return {
+          icon_hex: iconHex,
+          name: "Unavailable",
+        }
+      }
+
+      return response.json()
+    })())
   }
 
-  if (response.status === 404) {
-    const contentType = response.headers.get("content-type") ?? ""
-    if (!contentType.includes("application/json")) {
-      return {
-        icon_hex: iconHex,
-        name: "Unavailable",
-      }
-    }
-
-    try {
-      const detail = await response.json()
-      return {
-        icon_hex: detail.icon_hex ?? iconHex,
-        name: detail.name ?? "No database match",
-      }
-    } catch {
-      return {
-        icon_hex: iconHex,
-        name: "Unavailable",
-      }
-    }
-  }
-
-  if (!response.ok) {
-    return {
-      icon_hex: iconHex,
-      name: "Unavailable",
-    }
-  }
-
-  return response.json()
+  return iconDetailCache.get(iconHex)
 }
+
+function handleViewportChange() {
+  if (!activeTooltipTarget) {
+    return
+  }
+
+  if (!document.body.contains(activeTooltipTarget)) {
+    hideTooltip()
+    return
+  }
+
+  positionTooltip(activeTooltipTarget)
+}
+
+window.addEventListener("scroll", handleViewportChange, { passive: true })
+window.addEventListener("resize", handleViewportChange)
 
 function buildModelPicker() {
   const select = document.getElementById("model-select")
@@ -545,11 +854,19 @@ function randomIconId(ids) {
   return ids[Math.floor(Math.random() * ids.length)]
 }
 
-async function switchModel(modelId) {
+async function switchModel(
+  modelId,
+  { preferredIconId = null, recordHistory = false } = {},
+) {
+  const previousSelection = {
+    iconId: currentIconId,
+    modelId: currentModelId,
+  }
   const previousModelId = currentModelId
   currentModelId = modelId
   const model = manifest.models.find((candidate) => candidate.id === modelId)
   setGridSize(reservedGridSizeForModel(model))
+  renderIconHistory()
 
   let meta
   try {
@@ -558,6 +875,7 @@ async function switchModel(modelId) {
     currentModelId = previousModelId
     document.getElementById("model-select").value = previousModelId ?? ""
     setStatus(error.message)
+    renderIconHistory()
     return
   }
 
@@ -566,19 +884,33 @@ async function switchModel(modelId) {
     currentModelId = previousModelId
     document.getElementById("model-select").value = previousModelId ?? ""
     setStatus("No icons available")
+    renderIconHistory()
     return
   }
 
-  if (!ids.includes(currentIconId)) {
+  if (preferredIconId != null) {
+    currentIconId = preferredIconId
+  } else if (!ids.includes(currentIconId)) {
     currentIconId = randomIconId(ids)
   }
 
   document.getElementById("model-select").value = currentModelId
-  await showIcon(currentIconId)
+  await showIcon(currentIconId, {
+    recordHistory,
+    previousSelection,
+  })
 }
 
-async function showIcon(iconId) {
-  currentIconId = iconId
+async function showIcon(
+  iconId,
+  {
+    recordHistory = false,
+    previousSelection = {
+      iconId: currentIconId,
+      modelId: currentModelId,
+    },
+  } = {},
+) {
   const generation = navigationGeneration + 1
   navigationGeneration = generation
 
@@ -587,19 +919,23 @@ async function showIcon(iconId) {
   const focusIndex = ids.indexOf(iconId)
 
   if (focusIndex === -1) {
+    renderIconHistory()
     renderGridNotice("Icon unavailable")
     setStatus("Icon unavailable")
-    setIconDetail(iconId, "Unavailable")
     return
   }
+
+  updateIconHistory(iconId, currentModelId, {
+    recordPrevious: recordHistory,
+    previousSelection,
+  })
+  currentIconId = iconId
 
   const isCurrentRender = () => generation === navigationGeneration
 
   setStatus("")
-  setIconDetail(iconId, "Loading...")
   const [similarResult, detailResult] = await Promise.allSettled([
     loadNearest(currentModelId, iconId),
-    loadIconDetail(iconId),
   ])
 
   if (!isCurrentRender()) {
@@ -610,10 +946,6 @@ async function showIcon(iconId) {
     ? similarResult.value
     : null
   const similar = Array.isArray(similarValue) ? similarValue : []
-  const iconHex = normalizeHexReference(iconId) ?? String(iconId)
-  const detail = detailResult.status === "fulfilled"
-    ? detailResult.value
-    : { icon_hex: iconHex, name: "Unavailable" }
 
   const size = gridSizeForNeighborCount(similar.length)
   const center = Math.floor(size / 2)
@@ -669,7 +1001,6 @@ async function showIcon(iconId) {
   } else if (!missingIconsNotified) {
     setStatus("")
   }
-  setIconDetail(detail.icon_hex ?? iconId, detail.name ?? "Unnamed")
 }
 
 async function main() {
@@ -689,6 +1020,7 @@ async function main() {
     (model) => model.id === currentModelId,
   )
   setGridSize(reservedGridSizeForModel(initialModel))
+  syncHistoryWithManifest()
 
   const meta = await loadMeta(currentModelId)
   if (!meta.image_ids.length) {
@@ -701,10 +1033,13 @@ async function main() {
   await showIcon(currentIconId)
 }
 
+loadSavedHistory()
+
 main().catch((error) => {
   console.error(error)
   setStatus(error.message)
   setModelPickerEnabled(false)
   renderGridNotice(error.message)
-  setIconDetail(null, "Unavailable")
+  hideTooltip()
+  renderIconHistory()
 })

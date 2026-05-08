@@ -7,20 +7,19 @@
   </head>
   <body>
     <div id="grid" class="grid"></div>
-    <section id="icon-detail" class="icon-detail" aria-live="polite">
-      <div class="icon-detail-row">
-        <span class="icon-detail-label">icon</span>
-        <span id="icon-detail-hex" class="icon-detail-value">Loading...</span>
-      </div>
-      <div class="icon-detail-row">
-        <span class="icon-detail-label">name</span>
-        <span id="icon-detail-name" class="icon-detail-value">Loading...</span>
-      </div>
+    <section
+      id="icon-history"
+      class="icon-history"
+      aria-label="Recently selected icons"
+    >
+      <div id="icon-history-strip" class="icon-history-strip" role="list"></div>
     </section>
     <div class="details">
-      <div>click an icon to update the display</div>
-      <div>refresh the page for a new random icon</div>
       <div id="status" class="status" aria-live="polite"></div>
+    </div>
+    <div id="icon-tooltip" class="icon-tooltip" role="tooltip" hidden>
+      <div id="icon-tooltip-hex" class="icon-tooltip-hex"></div>
+      <div id="icon-tooltip-name" class="icon-tooltip-name"></div>
     </div>
     <footer>
       <div class="controls">
